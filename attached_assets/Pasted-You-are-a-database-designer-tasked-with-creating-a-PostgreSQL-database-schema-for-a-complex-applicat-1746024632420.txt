@@ -1,0 +1,501 @@
+You are a database designer tasked with creating a PostgreSQL database schema for a complex application. You must adhere strictly to the following specifications. Do not deviate from these instructions.
+
+B - GLOBAL NAMING CONVENTIONS
+
+Tables:
+	•	Use lower_snake_case for table names: This ensures readability and consistency in SQL queries.
+	•	Prefix sensitive module tables with short namespaces: For clarity and organization, use appropriate prefixes like auth_, profile_, wallet_, kyc_, report_, etc.
+
+Columns:
+	•	Always use lower_snake_case: Maintain uniformity across all columns.
+	•	Primary keys should always be named id: Always use id as the column name for primary keys (auto UUID or SERIAL).
+	•	Foreign keys should end with _id: For consistency, all foreign key columns should follow this pattern (e.g., user_id, wallet_id).
+	•	Timestamps: Use the following standard for timestamps:
+	•	created_at
+	•	updated_at
+	•	deleted_at (for soft deletes)
+
+Keys/Indexes:
+	•	Index frequently used fields:
+	•	Index columns such as user_id, email, username, and any transactional fields frequently queried.
+
+Data Types:
+	•	UUID for all IDs if possible: Use UUIDs as the primary key type for uniqueness and scalability.
+	•	TIMESTAMP WITH TIMEZONE for all date fields: This ensures time is stored accurately, especially in multi-jurisdictional systems.
+	•	VARCHAR(255): Use this for text fields (email, username, etc.) unless longer text fields are required.
+	•	JSONB: Use JSONB for flexible fields like settings, preferences, and metadata.
+
+Security:
+	•	Password hashing: Always use strong hashing algorithms like bcrypt or argon2.
+	•	Encrypt sensitive fields: Fields containing KYC documents, payment methods, or any sensitive data should be encrypted.
+	•	Soft delete wherever possible: Avoid physically deleting data in tables that hold important user information. Instead, use a deleted_at column for soft deletes.
+
+⸻
+
+Tables to Follow the Global Naming Convention:
+	1.	Authentication & Authorization
+
+Table Name	Purpose
+auth_users	Core account record (login details, email, password hash, role).
+auth_sessions	Active sessions with device info, IP, JWT token hashes.
+auth_2fa	2FA keys and status (TOTP secrets, status).
+	auth_password_resets	Password reset tokens and timestamps.
+
+	2.	Profile Management
+
+Table Name	Purpose
+profile_players	Personal info (name, DOB, avatar, settings, language, timezone).
+	profile_preferences	Player preferences (notifications, marketing opt-ins).
+
+	3.	Wallet & Transactions
+
+Table Name	Purpose
+wallet_accounts	Wallets tied to players.
+wallet_transactions	All balance changes (deposit, withdrawal, gameplay).
+	wallet_payment_methods	Linked cards, bank accounts, crypto wallets.
+
+	4.	Player Data
+
+Table Name	Purpose
+user_game_stats	Game results, scores, last played games.
+user_achievements	Unlocked badges, milestones.
+user_leaderboards	Current leaderboard standing.
+	user_saved_states	Save states for progressive activities or games.
+
+	5.	Social Features
+
+Table Name	Purpose
+social_friends	Friend relationships (pending/accepted).
+social_messages	Private messages between players.
+	social_groups	Group membership and group chat logs.
+
+	6.	Security
+
+Table Name	Purpose
+security_logs	Login attempts, IP tracking, device fingerprints.
+security_flags	Suspicious activities, fraud flags.
+	security_bans	Account suspensions, bans, reasons, durations.
+
+	7.	Customer Support
+
+Table Name	Purpose
+support_tickets	Player support requests (with thread history).
+	support_feedback	General feedback and suggestions.
+
+	8.	Reporting & Analytics
+
+Table Name	Purpose
+analytics_player_activity	Logins, sessions, game launches.
+analytics_financials	Deposit/withdrawal analysis.
+	analytics_behavior	Time spent, page views, actions taken.
+
+	9.	Affiliate Management
+
+Table Name	Purpose
+affiliate_partners	Partner info (names, sites, terms).
+	affiliate_commissions	Tracked earnings and payouts per player referred.
+
+	10.	Bonus System
+
+Table Name	Purpose
+bonus_offers	Active bonuses and campaigns.
+	bonus_redemptions	Bonuses redeemed by players.
+
+	11.	Loyalty / VIP
+
+Table Name	Purpose
+loyalty_points	Earned loyalty points per player.
+	loyalty_tiers	Tier definitions (Gold, Platinum, etc.).
+
+
+
+⸻
+
+Quick Recap:
+	•	✅ Global standards are defined.
+	•	✅ Table structures are defined (core and modular).
+	•	✅ Naming conventions are standardized.
+
+⸻
+C - Core Database Table Structure
+
+
+1. Authentication & Authorization Tables
+
+Table Name
+Purpose
+auth_users
+Core account record (login details, email, password hash, role).
+auth_sessions
+Active sessions with device info, IP, JWT token hashes.
+auth_2fa
+2FA keys and status (TOTP secrets, status).
+auth_password_resets
+Password reset tokens and timestamps.
+
+
+
+⸻
+
+2. Profile Management Tables
+
+Table Name
+Purpose
+profile_players
+Personal info (name, DOB, avatar, settings, language, timezone).
+profile_preferences
+Player preferences (notifications, marketing opt-ins).
+
+
+⸻
+
+3. Wallet & Transactions Tables
+
+Table Name
+Purpose
+wallet_accounts
+Wallets tied to players.
+wallet_transactions
+All balance changes (deposit, withdrawal, gameplay).
+wallet_payment_methods
+Linked cards, bank accounts, crypto wallets.
+
+
+⸻
+
+4. Player Data Tables
+
+Table Name
+Purpose
+user_game_stats
+Game results, scores, last played games.
+user_achievements
+Unlocked badges, milestones.
+user_leaderboards
+Current leaderboard standing.
+user_saved_states
+Save states for progressive activities or games.
+
+
+
+⸻
+
+5. Social Features Tables
+
+Table Name
+Purpose
+social_friends
+Friend relationships (pending/accepted).
+social_messages
+Private messages between players.
+social_groups
+Group membership and group chat logs.
+
+
+⸻
+
+6. Security Tables
+
+Table Name
+Purpose
+security_logs
+Login attempts, IP tracking, device fingerprints.
+security_flags
+Suspicious activities, fraud flags.
+security_bans
+Account suspensions, bans, reasons, durations.
+
+
+⸻
+
+7. Customer Support Tables
+
+Table Name
+Purpose
+support_tickets
+Player support requests (with thread history).
+support_feedback
+General feedback and suggestions.
+
+
+⸻
+
+8. Reporting & Analytics Tables
+
+Table Name
+Purpose
+analytics_player_activity
+Logins, sessions, game launches.
+analytics_financials
+Deposit/withdrawal analysis.
+analytics_behavior
+Time spent, page views, actions taken.
+
+
+⸻
+
+9. Affiliate Management Tables
+
+Table Name
+Purpose
+affiliate_partners
+Partner info (names, sites, terms).
+affiliate_commissions
+Tracked earnings and payouts per player referred.
+
+
+⸻
+
+10. Bonus System Tables
+
+Table Name
+Purpose
+bonus_offers
+Active bonuses and campaigns.
+bonus_redemptions
+Bonuses redeemed by players.
+
+
+⸻
+
+11. Loyalty / VIP Tables
+
+Table Name
+Purpose
+loyalty_points
+Earned loyalty points per player.
+loyalty_tiers
+Tier definitions (Gold, Platinum, etc.).
+
+
+⸻
+
+12. Additional Tables Based on New Modules
+
+Table Name
+Purpose
+security_events
+Logs of security events (system, network, application).
+security_alerts
+Active security alerts triggered by system events.
+security_compliance
+Logs of compliance audits and violations.
+
+
+⸻
+
+Indexes & Performance Optimizations
+
+1. Indexes:
+	•	user_auth: Index on email and mobile_number for faster lookups.
+	•	auth_sessions: Index on user_id and session_id for efficient session management.
+	•	wallet_accounts: Index on user_id and currency.
+	•	wallet_transactions: Index on wallet_id, transaction_type, transaction_status, and transaction_time.
+	•	wallet_payment_methods: Index on user_id.
+	•	security_logs: Index on event_type and event_timestamp.
+	•	security_events: Index on event_timestamp, severity.
+
+2. Roles Table (Optional, for future scalability):
+	•	roles (table):
+	•	role_id (UUID, PK)
+	•	role_name (VARCHAR(50), unique)
+	•	permissions (JSON)
+
+⸻
+
+Notes:
+
+1. Multi-Currency Support:
+	•	The preferred_currency field in user_auth ensures users can set their default currency.
+	•	The currency field in auth_sessions allows for session-based currency preferences.
+
+2. Scalability Considerations:
+	•	The schema is designed for large user bases and scalability, particularly through the use of UUIDs as primary keys, indexing, and optimized queries for user authentication and session management.
+
+3. Mobile Number Validation:
+	•	The mobile_number field includes validation for format consistency and uniqueness.
+
+4. NTP Time Synchronization:
+	•	All timestamps are recorded using TIMESTAMP WITH TIMEZONE to ensure accurate time tracking, especially for multi-jurisdictional systems.
+
+5. Soft Deletes:
+	•	The deleted_at column is added to support soft deletes, particularly for tables like user_auth and wallet_accounts, ensuring that data is retained for auditing and recovery.
+
+⸻
+
+Quick Recap:
+	•	✅ Global standards are defined.
+	•	✅ Table structures are defined (core and modular).
+	•	✅ Naming conventions are standardized.
+	•	✅ Key performance optimizations identified.
+
+⸻
+D - Tech Stack and Libraries Specification
+
+1. Frontend (Client-Side)
+
+1.1 Framework
+	•	React.js: React is selected for building the interactive UI. It is highly performant, widely adopted, and easily scalable for complex UIs.
+	•	Why React: React efficiently updates and renders the user interface, making it ideal for dynamic applications that need real-time updates.
+	•	Scalability: React allows for seamless scalability of the application, especially when new features or modules are added.
+	•	State Management:
+	•	Primary Option: Redux is the preferred option for global state management, ensuring consistency across modules and components.
+	•	Alternative Options: For simpler modules, consider using React Context or Zustand, which are more lightweight state management solutions that require less boilerplate code.
+
+1.2 Styling
+	•	Tailwind CSS: A utility-first CSS framework that facilitates rapid styling without writing custom CSS.
+	•	Why Tailwind: Tailwind provides flexibility and consistency, and it streamlines the development process by using predefined utility classes.
+	•	Efficiency: This approach allows for rapid prototyping and easy customization across different components and pages.
+
+1.3 Authentication
+	•	Auth0 or Firebase Authentication: Both Auth0 and Firebase provide robust, pre-built authentication solutions.
+	•	Why Auth0/Firebase: They offer Single Sign-On (SSO), Two-Factor Authentication (2FA), multi-currency user management, and have built-in security features to ensure seamless user logins and role-based access.
+
+⸻
+
+2. Backend (Server-Side)
+
+2.1 Framework
+	•	Node.js with Express.js/NestJS:
+	•	Why Node.js: Node.js is ideal for I/O-bound operations, real-time applications, and high-concurrency scenarios such as the Wallet & Transactions and Authentication & Authorization services.
+	•	Why Express/NestJS:
+	•	Express.js offers flexibility for rapid development of RESTful APIs.
+	•	NestJS (built on top of Express.js) is more structured and preferred for larger applications requiring scalability and maintainability.
+	•	Python with Django/FastAPI:
+	•	Why Python: Python is preferred for CPU-bound operations, data-intensive tasks, and applications requiring strong data modeling and security, such as KYC and Reporting & Analytics services.
+	•	Why Django/FastAPI:
+	•	Django offers an all-in-one solution for data models, views, and templates.
+	•	FastAPI is highly performant, especially for asynchronous API calls, and is a great choice for high-performance systems that require fast request/response handling.
+
+2.2 Database
+	•	PostgreSQL: PostgreSQL is the primary relational database used for structured data that requires ACID properties.
+	•	Why PostgreSQL:
+	•	ACID compliance ensures reliable transactions.
+	•	Best suited for user accounts, transactions, and financial records in Authentication & Authorization, Wallet & Transactions, and KYC services.
+	•	MongoDB: MongoDB is used for unstructured or semi-structured data.
+	•	Why MongoDB:
+	•	Ideal for logs, event data, and user activity where flexibility and scalability are required.
+	•	Utilized in the Security & Monitoring service for storing security logs and event data.
+	•	Redis: Used for session management, caching, and Pub/Sub messaging.
+	•	Why Redis:
+	•	Ultra-fast caching mechanism that helps improve performance by reducing the load on the primary database.
+	•	Essential for handling high-throughput systems.
+
+2.3 Security
+	•	Encryption:
+	•	AES-256: Used for symmetric encryption for sensitive data like passwords, payment methods, etc.
+	•	RSA: Used for asymmetric encryption, especially for key management.
+	•	Libraries:
+	•	CryptoJS (Node.js) or PyCryptodome (Python) for encryption functions.
+	•	OAuth 2.0 & JWT: These protocols will secure and manage authentication across the distributed system.
+	•	JWT tokens will be signed using RS256 asymmetric encryption.
+	•	TLS/SSL:
+	•	Why TLS 1.3: Ensures that data sent between clients and services is encrypted, preventing data leaks and man-in-the-middle attacks.
+
+⸻
+
+3. API and Services
+
+3.1 API Design
+	•	RESTful API: Widely adopted for stateless communication between services.
+	•	Why REST: Flexible and easy to integrate, supporting all HTTP methods for CRUD operations.
+	•	Authentication: Use JWT for stateless authentication to ensure scalability and security.
+	•	GraphQL (Optional for Complex Queries and Reporting):
+	•	Why GraphQL: Ideal for fetching specific data fields, reducing the overhead of fetching unnecessary data. This is particularly beneficial for dynamic and complex reporting scenarios.
+
+3.2 API Gateway
+	•	Kong or NGINX:
+	•	Why: Both are highly scalable API Gateways, providing load balancing, routing, rate-limiting, and enhanced security.
+
+3.3 Service Communication
+	•	RabbitMQ or Kafka:
+	•	Why: These message brokers enable asynchronous messaging between services, which is crucial for scalable, reliable communication across distributed microservices.
+
+⸻
+
+4. DevOps & Deployment
+
+4.1 Containerization
+	•	Docker:
+	•	Why Docker: Ensures that each service runs in its isolated environment, promoting consistency across different environments (e.g., development, staging, production).
+
+4.2 Container Orchestration
+	•	Kubernetes:
+	•	Why Kubernetes: Provides container orchestration and enables the platform to scale, ensuring high availability as the number of concurrent users increases.
+
+4.3 CI/CD
+	•	GitHub Actions or Jenkins:
+	•	Why: These tools automate testing, build, and deployment pipelines, ensuring continuous integration and delivery.
+
+⸻
+
+5. Monitoring & Logging
+
+5.1 Monitoring
+	•	Prometheus:
+	•	Why Prometheus: Ideal for high-frequency time-series data and scaling to monitor millions of metrics across services.
+	•	Grafana:
+	•	Why Grafana: Integrates seamlessly with Prometheus and provides customizable dashboards to monitor system health, transaction volume, and performance metrics.
+
+5.2 Logging
+	•	ELK Stack (Elasticsearch, Logstash, Kibana):
+	•	Why ELK: A powerful, scalable logging solution ideal for managing and analyzing logs in high-volume environments.
+
+⸻
+
+6. Performance and Scalability Considerations
+
+6.1 Load Balancing
+	•	HAProxy or NGINX:
+	•	Why: Both provide efficient traffic distribution, ensuring no server is overwhelmed. Crucial for handling large numbers of concurrent users.
+
+6.2 Auto-Scaling
+	•	AWS Auto Scaling or Google Cloud Autoscaler:
+	•	Why: Automatically adjusts infrastructure resources based on demand, ensuring scalability.
+
+⸻
+
+7. Summary of Tech Stack
+
+Component
+Recommended Tech
+Reason
+Frontend Framework
+React.js, Tailwind CSS
+Interactive UI, fast styling
+Backend Framework
+Node.js (Express) / Django / FastAPI
+High concurrency, rapid development
+Database
+PostgreSQL (SQL), MongoDB (NoSQL)
+Reliable, scalable, flexible storage
+Encryption
+CryptoJS (Node.js), PyCryptodome (Python)
+AES-256, RSA encryption for sensitive data
+Authentication
+JWT, OAuth 2.0
+Secure and scalable authentication
+API Gateway
+Kong, NGINX
+Load balancing, security
+DevOps
+Docker, Kubernetes, GitHub Actions
+Containerization, CI/CD
+Monitoring
+Prometheus, Grafana
+Monitoring system performance
+Logging
+ELK Stack (Elasticsearch, Logstash, Kibana)
+Scalable log analysis
+
+
+
+⸻
+
+Key Takeaways:
+	•	✅ Scalability: The chosen stack ensures scalability at all levels, from frontend to backend.
+	•	✅ Security: AES-256, JWT, and TLS ensure that data is encrypted both at rest and in transit, while OAuth 2.0 provides secure authentication.
+	•	✅ Compliance: The stack supports regulatory standards like GDPR, PCI DSS, and others.
+	•	✅ Flexibility: The stack supports continuous development and future-proof modular architecture.
+
+⸻
