@@ -1,0 +1,73 @@
+import { pgTable, text, serial, integer, boolean, timestamp, json, uuid, pgEnum } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod";
+
+// Database schema definition
+export const tableSchema = pgTable("db_tables", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  description: text("description"),
+  moduleId: text("module_id").notNull(),
+});
+
+export const columnSchema = pgTable("db_columns", {
+  id: serial("id").primaryKey(),
+  tableId: integer("table_id").notNull().references(() => tableSchema.id),
+  name: text("name").notNull(),
+  type: text("type").notNull(),
+  description: text("description"),
+  isPrimaryKey: boolean("is_primary_key").default(false),
+  isNotNull: boolean("is_not_null").default(false),
+  isUnique: boolean("is_unique").default(false),
+  isForeignKey: boolean("is_foreign_key").default(false),
+  defaultValue: text("default_value"),
+  referencesTable: text("references_table"),
+  referencesColumn: text("references_column"),
+});
+
+export const indexSchema = pgTable("db_indexes", {
+  id: serial("id").primaryKey(),
+  tableId: integer("table_id").notNull().references(() => tableSchema.id),
+  name: text("name").notNull(),
+  columns: text("columns").array().notNull(),
+  unique: boolean("unique").default(false),
+});
+
+export const moduleSchema = pgTable("db_modules", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  description: text("description"),
+});
+
+export const relationshipSchema = pgTable("db_relationships", {
+  id: serial("id").primaryKey(),
+  sourceTable: text("source_table").notNull(),
+  targetTable: text("target_table").notNull(),
+  sourceField: text("source_field"),
+  targetField: text("target_field"),
+  relationType: text("relation_type").notNull(),
+  label: text("label"),
+});
+
+// Insert schemas
+export const insertTableSchema = createInsertSchema(tableSchema).omit({ id: true });
+export const insertColumnSchema = createInsertSchema(columnSchema).omit({ id: true });
+export const insertIndexSchema = createInsertSchema(indexSchema).omit({ id: true });
+export const insertModuleSchema = createInsertSchema(moduleSchema).omit({ id: true });
+export const insertRelationshipSchema = createInsertSchema(relationshipSchema).omit({ id: true });
+
+// Types
+export type Table = typeof tableSchema.$inferSelect;
+export type InsertTable = z.infer<typeof insertTableSchema>;
+
+export type Column = typeof columnSchema.$inferSelect;
+export type InsertColumn = z.infer<typeof insertColumnSchema>;
+
+export type Index = typeof indexSchema.$inferSelect;
+export type InsertIndex = z.infer<typeof insertIndexSchema>;
+
+export type Module = typeof moduleSchema.$inferSelect;
+export type InsertModule = z.infer<typeof insertModuleSchema>;
+
+export type Relationship = typeof relationshipSchema.$inferSelect;
+export type InsertRelationship = z.infer<typeof insertRelationshipSchema>;
