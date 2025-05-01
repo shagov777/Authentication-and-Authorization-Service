@@ -21,7 +21,7 @@ export interface IStorage {
   // User authentication operations
   createUser(user: InsertUser): Promise<User>;
   getUserByUsername(username: string): Promise<User | undefined>;
-  getUserById(id: number): Promise<User | undefined>;
+  getUserById(id: number): Promise<User | null>;
   validateUser(username: string, password: string): Promise<User | null>;
   createSession(userId: number): Promise<string>;
   validateSession(token: string): Promise<User | null>;
@@ -177,9 +177,9 @@ export class MemStorage implements IStorage {
     return user;
   }
 
-  async getUserById(id: number): Promise<User | undefined> {
+  async getUserById(id: number): Promise<User | null> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user;
+    return user || null;
   }
 
   async validateUser(username: string, password: string): Promise<User | null> {
@@ -224,7 +224,8 @@ export class MemStorage implements IStorage {
       return null;
     }
     
-    return this.getUserById(session.userId);
+    const user = await this.getUserById(session.userId);
+    return user || null;
   }
 
   async deleteSession(token: string): Promise<void> {
