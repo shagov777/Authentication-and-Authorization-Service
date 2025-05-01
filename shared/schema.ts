@@ -49,12 +49,36 @@ export const relationshipSchema = pgTable("db_relationships", {
   label: text("label"),
 });
 
+// User Authentication Tables
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  username: text("username").notNull().unique(),
+  email: text("email").notNull().unique(),
+  password: text("password").notNull(),
+  fullName: text("full_name"),
+  role: text("role").default("user"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const sessions = pgTable("sessions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Insert schemas
 export const insertTableSchema = createInsertSchema(tableSchema).omit({ id: true });
 export const insertColumnSchema = createInsertSchema(columnSchema).omit({ id: true });
 export const insertIndexSchema = createInsertSchema(indexSchema).omit({ id: true });
 export const insertModuleSchema = createInsertSchema(moduleSchema).omit({ id: true });
 export const insertRelationshipSchema = createInsertSchema(relationshipSchema).omit({ id: true });
+
+// User Insert schemas
+export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertSessionSchema = createInsertSchema(sessions).omit({ id: true, createdAt: true });
 
 // Types
 export type Table = typeof tableSchema.$inferSelect;
@@ -71,3 +95,10 @@ export type InsertModule = z.infer<typeof insertModuleSchema>;
 
 export type Relationship = typeof relationshipSchema.$inferSelect;
 export type InsertRelationship = z.infer<typeof insertRelationshipSchema>;
+
+// User Types
+export type User = typeof users.$inferSelect;
+export type InsertUser = z.infer<typeof insertUserSchema>;
+
+export type Session = typeof sessions.$inferSelect;
+export type InsertSession = z.infer<typeof insertSessionSchema>;
