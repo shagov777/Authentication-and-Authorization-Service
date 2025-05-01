@@ -97,7 +97,7 @@ export default function SchemaFlow({
     });
   };
 
-  // Generate edges from relationships
+  // Generate edges from relationships - completely rewritten to avoid handle issues
   const generateEdges = (tables: DbTable[], customRelationships?: DbRelationship[]) => {
     const edges: Edge[] = [];
     
@@ -106,7 +106,7 @@ export default function SchemaFlow({
       table.columns.forEach(column => {
         if (column.isForeignKey && column.references) {
           edges.push({
-            id: `${table.name}-${column.name}-${column.references.table}`,
+            id: `fk-${table.name}-${column.name}-${column.references.table}`,
             source: table.name,
             target: column.references.table,
             markerEnd: {
@@ -123,15 +123,16 @@ export default function SchemaFlow({
       });
     });
     
-    // Add custom relationships if provided
+    // Add custom relationships if provided - completely rewritten to avoid handle issues
     if (customRelationships && customRelationships.length > 0) {
-      customRelationships.forEach(rel => {
+      customRelationships.forEach((rel, index) => {
+        // Only create edges for tables that actually exist in our current view
         if (tables.some(t => t.name === rel.source) && tables.some(t => t.name === rel.target)) {
-          // Create edge without sourceHandle/targetHandle to avoid React Flow errors
-          const edge: Edge = {
-            id: `${rel.source}-${rel.sourceHandle || 'id'}-${rel.target}`,
+          edges.push({
+            id: `rel-${index}-${rel.source}-${rel.target}`,
             source: rel.source,
             target: rel.target,
+            // Remove sourceHandle and targetHandle completely to avoid errors
             markerEnd: {
               type: MarkerType.ArrowClosed,
               width: 15,
@@ -141,18 +142,7 @@ export default function SchemaFlow({
             labelBgStyle: { fill: 'white' },
             labelStyle: { fontSize: 10 },
             className: `flow-edge-${rel.type === 'one-to-one' ? 'oneToOne' : rel.type === 'one-to-many' ? 'many' : 'primary'}`
-          };
-          
-          // Only add sourceHandle/targetHandle if they're defined
-          if (rel.sourceHandle) {
-            edge.sourceHandle = rel.sourceHandle;
-          }
-          
-          if (rel.targetHandle) {
-            edge.targetHandle = rel.targetHandle;
-          }
-          
-          edges.push(edge);
+          });
         }
       });
     }
