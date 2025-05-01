@@ -101,7 +101,7 @@ export default function TestBench() {
       username: "",
       email: "",
       password: "",
-      roleId: "2", // Default to regular user role
+      roleId: 2, // Default to regular user role
     },
   });
 
@@ -409,7 +409,7 @@ export default function TestBench() {
                               <FormLabel>Role</FormLabel>
                               <Select
                                 onValueChange={field.onChange}
-                                defaultValue={field.value}
+                                defaultValue={field.value.toString()}
                               >
                                 <FormControl>
                                   <SelectTrigger>

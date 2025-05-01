@@ -1,322 +1,144 @@
-# Database Schema Visualization Tool - Technical Specification
+# Technical Specification - Authentication & Authorization Module
 
-## Architecture Overview
+## Overview
 
-This document provides detailed technical specifications for the Database Schema Visualization Tool. It serves as a guide for future development and integration of new database modules.
+The Authentication & Authorization module provides a comprehensive solution for user identity management, secure authentication, and role-based access control within the database schema management application. This module follows industry standard security practices and integrates with the PostgreSQL database via Drizzle ORM.
 
-## Technology Stack
+## Technical Architecture
 
-- **Frontend**: React, TypeScript, ReactFlow, shadcn/ui components
-- **Backend**: Node.js, Express
-- **Database**: PostgreSQL
-- **ORM**: Drizzle ORM
-- **Authentication**: Custom implementation with secure password hashing
+### Components
 
-## Database Schema Definition
+1. **Authentication Service**
+   - Manages user registration, login, and session handling
+   - Implements password hashing with secure `scrypt` algorithm
+   - Maintains session state using `express-session`
 
-### Core Schema Tables
+2. **Authorization Service**
+   - Implements role-based access control (RBAC)
+   - Manages user roles and permissions
+   - Provides middleware for route protection
 
-```typescript
-// Database meta-schema tables
-export const tableSchema = pgTable("db_tables", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull().unique(),
-  description: text("description"),
-  moduleId: text("module_id").notNull(),
-});
+3. **Database Schema**
+   - Users table with secure password storage
+   - Roles table for access level management
+   - Sessions table for persistent session storage
 
-export const columnSchema = pgTable("db_columns", {
-  id: serial("id").primaryKey(),
-  tableId: integer("table_id").notNull().references(() => tableSchema.id),
-  name: text("name").notNull(),
-  type: text("type").notNull(),
-  description: text("description"),
-  isPrimaryKey: boolean("is_primary_key").default(false),
-  isNotNull: boolean("is_not_null").default(false),
-  isUnique: boolean("is_unique").default(false),
-  isForeignKey: boolean("is_foreign_key").default(false),
-  defaultValue: text("default_value"),
-  referencesTable: text("references_table"),
-  referencesColumn: text("references_column"),
-});
+4. **Client-Side Components**
+   - Protected route component for guarding routes
+   - Authentication hook for React components
+   - Login/registration forms with validation
 
-export const indexSchema = pgTable("db_indexes", {
-  id: serial("id").primaryKey(),
-  tableId: integer("table_id").notNull().references(() => tableSchema.id),
-  name: text("name").notNull(),
-  columns: text("columns").array().notNull(),
-  unique: boolean("unique").default(false),
-});
+## Implementation Details
 
-export const moduleSchema = pgTable("db_modules", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull().unique(),
-  description: text("description"),
-});
+### Authentication Flow
 
-export const relationshipSchema = pgTable("db_relationships", {
-  id: serial("id").primaryKey(),
-  sourceTable: text("source_table").notNull(),
-  targetTable: text("target_table").notNull(),
-  sourceField: text("source_field"),
-  targetField: text("target_field"),
-  relationType: text("relation_type").notNull(),
-  label: text("label"),
-});
+1. **Registration**
+   - Validate user input (username, email, password)
+   - Check for existing username
+   - Hash password with scrypt + salt
+   - Store user in database
+   - Create session and automatically log in user
 
-// Authentication tables
-export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
-  username: text("username").notNull().unique(),
-  email: text("email").notNull().unique(),
-  password: text("password").notNull(),
-  fullName: text("full_name"),
-  role: text("role").default("user"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
+2. **Login**
+   - Validate credentials against database
+   - Compare password using timing-safe comparison
+   - Create session for authenticated user
+   - Return user details (excluding password)
 
-export const sessions = pgTable("sessions", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id),
-  token: text("token").notNull().unique(),
-  expiresAt: timestamp("expires_at").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-```
+3. **Session Management**
+   - Use secure HTTP-only cookies
+   - Set appropriate cookie security flags
+   - Implement session expiration
+   - Store sessions in PostgreSQL via connect-pg-simple
 
-## Component Architecture
+4. **Logout**
+   - Destroy user session
+   - Clear authentication cookies
 
-### Frontend Structure
+### Password Security
 
-```
-client/
-├── src/
-│   ├── components/
-│   │   ├── SchemaFlow.tsx        # React Flow visualization component
-│   │   ├── SchemaTable.tsx       # Table node visualization
-│   │   ├── TableDetails.tsx      # Table details panel
-│   │   ├── ModuleSelector.tsx    # Module selection component
-│   │   ├── NavBar.tsx            # Application navigation bar
-│   │   └── Sidebar.tsx           # Sidebar navigation
-│   ├── pages/
-│   │   ├── DatabaseVisualizer.tsx # Main application page
-│   │   ├── ModuleView.tsx         # Module-specific view
-│   │   ├── ERDiagram.tsx          # Entity-relationship diagram view
-│   │   ├── SqlGenerator.tsx       # SQL script generation view
-│   │   └── Conventions.tsx        # Database conventions view
-│   ├── lib/
-│   │   ├── utils.ts               # Utility functions and types
-│   │   └── queryClient.ts         # API query client
-│   ├── App.tsx                    # Application root component
-│   └── main.tsx                   # Application entry point
-```
+- **Hashing Algorithm**: scrypt (Node.js crypto module)
+- **Salt**: Random 16-byte salt for each password
+- **Format**: `hashedPassword.salt` stored in database
+- **Comparison**: Timing-safe equals comparison to prevent timing attacks
 
-### Backend Structure
+### Role-Based Access Control
 
-```
-server/
-├── index.ts                      # Server entry point
-├── routes.ts                     # API route definitions
-├── storage.ts                    # Data storage interface and implementation
-├── db.ts                         # Database connection
-└── vite.ts                       # Vite server configuration
-```
+- **Admin Role**: Full system access, including user management
+- **Regular Users**: Access to schema visualization and basic features
+- **Guest Users**: Read-only access to public schema information
 
-### Shared Code
-
-```
-shared/
-├── schema.ts                     # Shared database schema definitions
-└── database-schema.ts            # Application database schema data
-```
-
-## Key Implementation Details
-
-### Storage Interface
-
-The `IStorage` interface defines all operations for database access:
+### Data Models
 
 ```typescript
-export interface IStorage {
-  // Schema-related operations
-  getSchema(): Promise<DbSchema>;
-  getAllModules(): Promise<DbModule[]>;
-  getModuleById(id: string): Promise<DbModule | undefined>;
-  getTableByName(name: string): Promise<DbTable | undefined>;
-  searchSchema(query: string): Promise<{ tables: DbTable[], columns: { table: string, column: any }[] }>;
-  generateSqlForModule(moduleId: string): Promise<string>;
-  generateSqlForAllModules(): Promise<string>;
-  
-  // User authentication operations
-  createUser(user: InsertUser): Promise<User>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  getUserById(id: number): Promise<User | undefined>;
-  validateUser(username: string, password: string): Promise<User | null>;
-  createSession(userId: number): Promise<string>;
-  validateSession(token: string): Promise<User | null>;
-  deleteSession(token: string): Promise<void>;
+// User Model
+interface User {
+  id: number;
+  username: string;
+  email: string | null;
+  password: string; // Hashed
+  roleId: number | null;
+  isActive: boolean | null;
+  createdAt: Date;
+  updatedAt: Date;
+  lastLogin: Date | null;
+}
+
+// Role Model
+interface Role {
+  id: number;
+  name: string;
+  description: string | null;
+  createdAt: Date;
 }
 ```
 
-### React Flow Implementation
+## Security Considerations
 
-The diagram visualization uses React Flow with the following key components:
+- **Password Storage**: Passwords are never stored in plain text
+- **HTTPS**: All communication should be over HTTPS in production
+- **XSS Prevention**: HTTP-only cookies prevent JavaScript access to auth tokens
+- **CSRF Protection**: Can be added via CSRF tokens and same-site cookie policy
+- **Rate Limiting**: API endpoints should be rate-limited to prevent brute force attacks
+- **Input Validation**: All user inputs are validated and sanitized
 
-1. Custom node types for table representation
-2. Edge definitions for relationship visualization
-3. Layout algorithms for positioning nodes
-4. Event handlers for user interaction
+## Testing Strategy
 
-Example node generation:
-```typescript
-const generateLayout = useCallback((tables: DbTable[]) => {
-  const HORIZONTAL_SPACING = 300;
-  const VERTICAL_SPACING = 300;
-  const NODES_PER_ROW = fullDiagram ? 5 : 3;
+1. **Unit Tests**
+   - Test password hashing/verification in isolation
+   - Test route protection middleware
 
-  return tables.map((table, index) => {
-    const row = Math.floor(index / NODES_PER_ROW);
-    const col = index % NODES_PER_ROW;
+2. **Integration Tests**
+   - Test authentication flow (register, login, logout)
+   - Test role-based permissions
 
-    return {
-      id: table.name,
-      type: 'tableNode',
-      data: {
-        tableName: table.name,
-        columns: table.columns,
-        moduleId: moduleId
-      },
-      position: {
-        x: col * HORIZONTAL_SPACING + 50,
-        y: row * VERTICAL_SPACING + 50
-      },
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left
-    };
-  });
-}, [fullDiagram, moduleId]);
-```
+3. **Security Testing**
+   - Test password strength requirements
+   - Test protection against common attacks (CSRF, XSS)
 
-Example edge generation:
-```typescript
-const generateEdges = useCallback(() => {
-  if (!isInitialized || tables.length === 0) return [];
-  
-  try {
-    const edges: Edge[] = [];
-    
-    // Generate edges from foreign keys
-    tables.forEach(table => {
-      table.columns.forEach(column => {
-        if (column.isForeignKey && column.references && tableNames.includes(column.references.table)) {
-          const uniqueId = `fk-${Math.random().toString(36).substring(2, 9)}`;
-          
-          edges.push({
-            id: uniqueId,
-            source: table.name,
-            target: column.references.table,
-            type: 'default',
-            animated: false,
-            markerEnd: {
-              type: MarkerType.ArrowClosed,
-              width: 15,
-              height: 15
-            },
-            label: column.name,
-            labelBgStyle: { fill: 'white' },
-            labelStyle: { fontSize: 10 },
-            style: { strokeWidth: 1.5 },
-            className: 'flow-edge-foreign'
-          });
-        }
-      });
-    });
-    
-    // Add filtered relationships
-    filteredRelationships.forEach((rel, index) => {
-      const uniqueId = `rel-${Math.random().toString(36).substring(2, 9)}`;
-      
-      edges.push({
-        id: uniqueId,
-        source: rel.source,
-        target: rel.target,
-        type: 'default',
-        animated: false,
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          width: 15,
-          height: 15
-        },
-        label: rel.label,
-        labelBgStyle: { fill: 'white' },
-        labelStyle: { fontSize: 10 },
-        style: { strokeWidth: 1.5 },
-        className: `flow-edge-${rel.type === 'one-to-one' ? 'oneToOne' : rel.type === 'one-to-many' ? 'many' : 'primary'}`
-      });
-    });
-    
-    return edges;
-  } catch (error) {
-    console.error("Error generating edges:", error);
-    return [];
-  }
-}, [tables, tableNames, filteredRelationships, isInitialized]);
-```
+## Future Enhancements
 
-### Authentication Implementation
+1. **Multi-Factor Authentication (MFA)**
+   - Time-based one-time passwords (TOTP)
+   - Email verification codes
 
-The authentication system uses industry-standard security practices:
+2. **OAuth Integration**
+   - Support for social login providers
+   - OpenID Connect support
 
-1. **Password Hashing**: Passwords are securely hashed using scrypt with unique salts for each user
-2. **Session Management**: Secure session tokens with expiration times
-3. **User Validation**: Timing-safe comparison for password verification
+3. **Advanced Permissions System**
+   - Fine-grained permissions beyond role-based access
+   - Permission groups and inheritance
 
-Example password hashing:
-```typescript
-async function hashPassword(password: string): Promise<string> {
-  const salt = randomBytes(16).toString('hex');
-  const derivedKey = await scryptAsync(password, salt, 64) as Buffer;
-  return `${derivedKey.toString('hex')}.${salt}`;
-}
-```
+4. **Audit Logging**
+   - Record all authentication events
+   - Track failed login attempts
 
-## API Endpoints
+## Dependencies
 
-### Schema API
-
-- `GET /api/modules` - List all modules
-- `GET /api/modules/:id` - Get specific module details
-- `GET /api/schema` - Get complete schema information
-- `GET /api/tables/:name` - Get table details
-- `GET /api/search?q=query` - Search tables and columns
-- `GET /api/sql/:moduleId` - Generate SQL for module
-- `GET /api/sql` - Generate SQL for all modules
-
-### Authentication API
-
-- `POST /api/register` - Register new user
-- `POST /api/login` - User login
-- `POST /api/logout` - User logout
-- `GET /api/user` - Get current user information
-
-## Adding New Database Modules
-
-To add new database modules to the system:
-
-1. Define the module structure with tables and relationships
-2. Add the module definition to `shared/database-schema.ts`
-3. Follow the module structure pattern established in existing modules
-4. Ensure all required fields are properly defined
-5. Test visualization in all views (Module, ER, SQL)
-
-## Common Challenges and Solutions
-
-1. **React Flow Edge Rendering**: Carefully manage edge generation with unique IDs to prevent React Flow errors
-2. **Node Positioning**: Use a consistent layout algorithm for node positioning
-3. **Relationship Visualization**: Ensure relationship directionality is clear with properly labeled edges
-4. **SQL Generation**: Follow consistent patterns for generating SQL, particularly for constraints and indexes
-
-## Conclusion
-
-This technical specification provides comprehensive details for understanding and extending the Database Schema Visualization Tool. Future development should adhere to these patterns to ensure consistency and maintainability.
+- **express-session**: Session management
+- **passport, passport-local**: Authentication middleware
+- **crypto (Node.js)**: Secure password hashing
+- **drizzle-orm**: Database interaction
+- **zod**: Request validation
+- **react-hook-form**: Form handling and validation

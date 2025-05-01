@@ -1,192 +1,177 @@
-# Database Schema Visualization Tool Documentation
+# Database Visualization Tool Documentation
 
-## Overview
+## Introduction
 
-This document describes the Database Schema Visualization Tool, a comprehensive application for visualizing and managing PostgreSQL database schemas. The tool provides an interactive way to explore complex database architectures through multiple views and generates SQL scripts for implementation.
+This document provides comprehensive information about the database visualization features of our PostgreSQL schema management application. The visualization tools are designed to help database administrators, developers, and architects understand complex database schemas through interactive diagrams and visual aids.
 
-## Core Components
+## Visualization Components
 
-### Data Model
+### 1. ER Diagram View
 
-The system uses the following data model to represent database schemas:
+The Entity-Relationship diagram provides a comprehensive visual representation of your database schema, showing tables, their relationships, and cardinality.
 
-```typescript
-// Basic schema components
-type DbColumn = {
-  name: string;
-  type: string;
-  description?: string;
-  isPrimaryKey?: boolean;
-  isForeignKey?: boolean;
-  isNotNull?: boolean;
-  isUnique?: boolean;
-  defaultValue?: string;
-  references?: {
-    table: string;
-    column: string;
-  };
-};
+#### Features:
+- **Interactive Graph**: Pan, zoom, and click on elements to explore
+- **Table Details**: View column details by selecting tables
+- **Relationship Lines**: Visualize foreign key relationships between tables
+- **Customizable View**: Filter by module or show the complete database
 
-type DbIndex = {
-  name: string;
-  columns: string[];
-  unique?: boolean;
-};
+#### Usage:
+1. Navigate to the ER Diagram tab
+2. Select a module from the dropdown to filter tables
+3. Click on tables to view their structure
+4. Use the controls to zoom in/out and reset the view
 
-type DbTable = {
-  name: string;
-  description?: string;
-  columns: DbColumn[];
-  indexes?: DbIndex[];
-  constraints?: string[];
-};
+### 2. Module View
 
-type DbModule = {
-  name: string;
-  description?: string;
-  tables: DbTable[];
-};
+The Module View provides a focused view of tables within a specific database module, allowing for easier analysis of related tables.
 
-type DbRelationship = {
-  source: string;
-  target: string;
-  sourceHandle?: string;
-  targetHandle?: string;
-  label: string;
-  type: "one-to-one" | "one-to-many" | "many-to-many";
-};
+#### Features:
+- **Module Selection**: Choose from predefined logical modules
+- **Table Grouping**: Tables are organized by their functional module
+- **Focused Analysis**: Examine relationships within a specific domain
+- **Detailed Inspection**: See primary keys, foreign keys, and constraints
 
-type DbSchema = {
-  modules: DbModule[];
-  relationships: DbRelationship[];
-};
+#### Usage:
+1. Select the Module View tab
+2. Choose a module from the sidebar
+3. Interact with the tables to see details
+4. Toggle between different modules to compare
+
+### 3. SQL Generator
+
+The SQL Generator automatically creates SQL DDL statements based on your schema visualization.
+
+#### Features:
+- **Complete Schema**: Generate SQL for the entire database
+- **Module-Specific**: Generate SQL for a specific module
+- **Copy to Clipboard**: Easily copy generated SQL
+- **Syntax Highlighting**: Clear formatting for better readability
+
+#### Usage:
+1. Navigate to the SQL Generator tab
+2. Select "All Modules" or a specific module
+3. View the generated SQL in the editor
+4. Use the copy button to copy the SQL to clipboard
+
+## Technical Implementation
+
+### Core Technologies
+
+1. **ReactFlow**: Used for the interactive graph rendering
+   - Handles node positioning and edge connections
+   - Provides zoom and pan functionality
+   - Manages selection and highlighting
+
+2. **Custom Node Components**:
+   - `SchemaTable`: Renders table nodes with column information
+   - `SimpleEdge`: Custom edge component for relationship lines
+
+3. **Layout Engine**:
+   - Uses a force-directed layout algorithm for automatic positioning
+   - Ensures minimal edge crossings and optimal spacing
+
+### Data Flow
+
+```
+Database Schema → Schema Parser → Visualization Components → Interactive UI
 ```
 
-### Database Structure
+1. **Schema Loading**:
+   - Schema is loaded from the backend API
+   - Data is transformed into a format suitable for visualization
+   - Relationships are calculated and processed
 
-The tool uses the following database tables to store schema metadata:
+2. **Rendering Pipeline**:
+   - Tables are converted to nodes
+   - Relationships are converted to edges
+   - Positions are calculated or retrieved from saved layouts
 
-1. `db_modules` - Stores logical groupings of database tables (e.g., Authentication, Profile, Wallet)
-2. `db_tables` - Stores table definitions with references to their parent modules
-3. `db_columns` - Stores column definitions with references to their parent tables
-4. `db_indexes` - Stores index definitions for tables
-5. `db_relationships` - Stores relationships between tables
+3. **Interactivity Handling**:
+   - User interactions trigger state updates
+   - Selection state manages highlighted elements
+   - Zoom and pan controls update the viewport
 
-### Key Views
+## Customization Options
 
-The application consists of multiple views designed to provide different perspectives on the database schema:
+### Visual Styling
 
-1. **Module View**: Displays tables within a specific functional module (e.g., Authentication, Profiles)
-2. **ER Diagram**: Shows a complete entity-relationship diagram across all modules
-3. **SQL Generator**: Generates PostgreSQL-compatible SQL scripts for schema implementation
-4. **Conventions**: Documents database naming conventions and best practices
+The visualization components can be customized through:
 
-## Technical Components
+1. **Theme Configuration**: Light/dark mode support
+2. **Color Coding**: Tables can be color-coded by module or type
+3. **Layout Options**: Change between different layout algorithms
+4. **Display Density**: Adjust the amount of information displayed
 
-### Frontend
+### Filtering and Focus
 
-1. **React Flow** for interactive diagram visualization
-   - Custom node components for tables
-   - Edge components for relationships
-   - Zoom and pan controls for navigation
+Users can focus their analysis using:
 
-2. **Navigation**
-   - Sidebar for module selection
-   - Tab navigation for different views
+1. **Module Filters**: Show only tables from specific modules
+2. **Relationship Depth**: Show tables with direct or indirect relationships
+3. **Search Functionality**: Highlight tables matching search criteria
+4. **Column Visibility**: Toggle visibility of different column types
 
-3. **Table Details**
-   - Table information panel
-   - Column listing with type information
-   - Primary and foreign key indicators
+## Best Practices
 
-### Backend
+1. **Performance Optimization**:
+   - For large schemas (50+ tables), use module filtering
+   - Consider using the "lazy loading" option for better performance
 
-1. **Storage Layer**
-   - Interface for database operations
-   - Methods for retrieving modules, tables, and relationships
-   - SQL generation capabilities
+2. **Visual Clarity**:
+   - Use the "rearrange" feature to optimize layout when diagrams become cluttered
+   - Save custom layouts for frequently used views
 
-2. **API Endpoints**
-   - GET `/api/modules` - List all modules
-   - GET `/api/modules/:id` - Get specific module and its tables
-   - GET `/api/schema` - Get complete schema
-   - GET `/api/tables/:name` - Get specific table details
-   - GET `/api/search?q=query` - Search tables and columns
-   - GET `/api/sql/:moduleId` - Generate SQL for a specific module
-   - GET `/api/sql` - Generate SQL for all modules
+3. **Collaboration**:
+   - Use the "share view" feature to create shareable links with the current view
+   - Export diagrams as images for documentation
 
-## Implementation Requirements for New Modules
+4. **Analysis Workflow**:
+   - Start with module view for focused analysis
+   - Expand to full ER diagram to understand cross-module relationships
+   - Use SQL generator to implement or verify changes
 
-When implementing new modules in this system, ensure they follow these specifications:
+## Troubleshooting
 
-### 1. Module Structure
+### Common Issues
 
-Each module should be defined with:
-- A unique name
-- A description explaining the module's purpose
-- A collection of logically related tables
+1. **Diagram Too Cluttered**:
+   - Use module filtering to reduce the number of displayed tables
+   - Adjust the zoom level for better overview
+   - Use the "rearrange" function to optimize layout
 
-### 2. Table Requirements
+2. **Relationships Not Showing**:
+   - Verify that the tables have properly defined foreign keys
+   - Check if relationship display is enabled in settings
+   - Try refreshing the schema data
 
-Tables within a module should:
-- Have a descriptive name (snake_case preferred)
-- Include a detailed description of the table's purpose
-- Have a primary key (typically `id` with serial/integer type)
-- Follow consistent naming conventions
-- Include appropriate indexes for performance
+3. **Performance Issues**:
+   - Enable "performance mode" for large schemas
+   - Reduce the number of displayed tables
+   - Update to the latest version of the application
 
-### 3. Column Requirements
+## Extended Features
 
-Columns should be defined with:
-- A clear, descriptive name
-- Appropriate PostgreSQL data type
-- NOT NULL constraint where appropriate
-- Default values when needed
-- References to other tables when implementing foreign keys
+### Schema Comparison
 
-### 4. Relationship Requirements
+Compare two database schemas to identify differences:
 
-When defining relationships:
-- Specify the relationship type (one-to-one, one-to-many, many-to-many)
-- For many-to-many relationships, create a junction table
-- Use consistent naming patterns for foreign keys (e.g., `parent_table_id`)
-- Ensure referential integrity with appropriate constraints
+1. Select two schema versions or databases
+2. View color-coded differences in tables and relationships
+3. Generate migration scripts based on differences
 
-### 5. Indexing Guidelines
+### Schema History
 
-- Add unique indexes on columns requiring uniqueness constraints
-- Create indexes on columns frequently used in WHERE clauses
-- Add indexes on foreign key columns
-- Use composite indexes for queries that filter on multiple columns together
+Track changes to your schema over time:
 
-### 6. SQL Generation
+1. View historical versions of your schema
+2. See who made changes and when
+3. Restore previous versions if needed
 
-Ensure that all tables can be properly generated with:
-- CREATE TABLE statements with proper column definitions
-- Primary key constraints
-- Foreign key constraints
-- Index definitions
-- CHECK constraints where appropriate
+### Export Options
 
-## Usage Guide
+Export your visualizations in various formats:
 
-1. Select a module from the sidebar to view its tables
-2. Click on a table to view detailed information about its columns
-3. Switch to ER Diagram view to see relationships between tables
-4. Use the SQL Generator to create implementation scripts
-5. Refer to Conventions for database design best practices
-
-## Authentication Integration
-
-The visualization tool has been enhanced with authentication capabilities:
-
-1. User authentication database schema
-2. Secure password handling with salted hashing
-3. Session management
-4. Protected routes for authenticated users
-
-This addition allows the tool to be secured while maintaining all visualization functionality.
-
----
-
-This documentation should be used as a reference when creating new database modules to ensure consistency across the entire database schema.
+1. **Image Formats**: PNG, SVG for documentation
+2. **Document Formats**: PDF with table details
+3. **Code Formats**: SQL DDL, ORM models
