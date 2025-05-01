@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -54,6 +54,7 @@ function TableNode({ data, selected }: { data: any; selected: boolean }) {
   );
 }
 
+// Memoize nodeTypes to prevent React Flow warning
 const nodeTypes: NodeTypes = {
   tableNode: TableNode
 };
@@ -69,8 +70,8 @@ export default function SchemaFlow({
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
-  // Generate a layout for the nodes (basic grid layout)
-  const generateLayout = (tables: DbTable[]) => {
+  // Generate a layout for the nodes (basic grid layout) - memoized
+  const generateLayout = useCallback((tables: DbTable[]) => {
     const HORIZONTAL_SPACING = 300;
     const VERTICAL_SPACING = 300;
     const NODES_PER_ROW = fullDiagram ? 5 : 3;
@@ -95,20 +96,35 @@ export default function SchemaFlow({
         targetPosition: Position.Left
       };
     });
-  };
+  }, [fullDiagram, moduleId]);
 
-  // Generate edges from relationships - completely rewritten to avoid handle issues
-  const generateEdges = (tables: DbTable[], customRelationships?: DbRelationship[]) => {
+  // Get only the tables that exist in the current view for edge filtering
+  const tableNames = useMemo(() => {
+    return tables.map(table => table.name);
+  }, [tables]);
+
+  // Filter relationships to only include those that reference tables in the current view
+  const filteredRelationships = useMemo(() => {
+    if (!relationships || relationships.length === 0) return [];
+    return relationships.filter(rel => 
+      tableNames.includes(rel.source) && tableNames.includes(rel.target)
+    );
+  }, [relationships, tableNames]);
+
+  // Generate edges - completely rewritten without handles
+  const generateEdges = useCallback(() => {
     const edges: Edge[] = [];
     
-    // Generate edges from foreign keys
+    // Generate edges from foreign keys that exist in our tables
     tables.forEach(table => {
       table.columns.forEach(column => {
-        if (column.isForeignKey && column.references) {
+        if (column.isForeignKey && column.references && tableNames.includes(column.references.table)) {
           edges.push({
-            id: `fk-${table.name}-${column.name}-${column.references.table}`,
+            id: `fk-${table.name}-${column.name}`,
             source: table.name,
             target: column.references.table,
+            type: 'default', // explicit default type
+            animated: false,
             markerEnd: {
               type: MarkerType.ArrowClosed,
               width: 15,
@@ -117,46 +133,44 @@ export default function SchemaFlow({
             label: 'References',
             labelBgStyle: { fill: 'white' },
             labelStyle: { fontSize: 10 },
+            style: { strokeWidth: 1.5 },
             className: 'flow-edge-foreign'
           });
         }
       });
     });
     
-    // Add custom relationships if provided - completely rewritten to avoid handle issues
-    if (customRelationships && customRelationships.length > 0) {
-      customRelationships.forEach((rel, index) => {
-        // Only create edges for tables that actually exist in our current view
-        if (tables.some(t => t.name === rel.source) && tables.some(t => t.name === rel.target)) {
-          edges.push({
-            id: `rel-${index}-${rel.source}-${rel.target}`,
-            source: rel.source,
-            target: rel.target,
-            // Remove sourceHandle and targetHandle completely to avoid errors
-            markerEnd: {
-              type: MarkerType.ArrowClosed,
-              width: 15,
-              height: 15
-            },
-            label: rel.label,
-            labelBgStyle: { fill: 'white' },
-            labelStyle: { fontSize: 10 },
-            className: `flow-edge-${rel.type === 'one-to-one' ? 'oneToOne' : rel.type === 'one-to-many' ? 'many' : 'primary'}`
-          });
-        }
+    // Add filtered relationships
+    filteredRelationships.forEach((rel, index) => {
+      edges.push({
+        id: `rel-${index}`,
+        source: rel.source,
+        target: rel.target,
+        type: 'default', // explicit default type
+        animated: false,
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          width: 15,
+          height: 15
+        },
+        label: rel.label,
+        labelBgStyle: { fill: 'white' },
+        labelStyle: { fontSize: 10 },
+        style: { strokeWidth: 1.5 },
+        className: `flow-edge-${rel.type === 'one-to-one' ? 'oneToOne' : rel.type === 'one-to-many' ? 'many' : 'primary'}`
       });
-    }
+    });
     
     return edges;
-  };
+  }, [tables, tableNames, filteredRelationships]);
 
-  // Update nodes and edges when tables or selectedTable changes
+  // Update nodes and edges when tables or relationships change
   useEffect(() => {
     if (tables.length > 0) {
       setNodes(generateLayout(tables));
-      setEdges(generateEdges(tables, relationships));
+      setEdges(generateEdges());
     }
-  }, [tables, relationships]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tables, generateLayout, generateEdges, setNodes, setEdges]);
 
   // Update node selection when selectedTable changes
   useEffect(() => {
@@ -168,9 +182,9 @@ export default function SchemaFlow({
     );
   }, [selectedTable, setNodes]);
 
-  const handleNodeClick = (_: React.MouseEvent, node: Node) => {
+  const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     onSelectTable(node.id);
-  };
+  }, [onSelectTable]);
 
   return (
     <div className="h-full w-full">
@@ -183,9 +197,13 @@ export default function SchemaFlow({
         nodeTypes={nodeTypes}
         fitView
         attributionPosition="bottom-right"
+        minZoom={0.1}
+        maxZoom={2}
+        deleteKeyCode={null}
+        multiSelectionKeyCode={null}
       >
         <Controls />
-        <Background />
+        <Background gap={16} size={1} />
       </ReactFlow>
     </div>
   );
