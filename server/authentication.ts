@@ -409,18 +409,56 @@ export function setupAuth(app: Express) {
       // Validate refresh token
       const userId = validateRefreshToken(refreshToken);
       if (!userId) {
+        // Log failed token refresh
+        await storage.createAuditLog({
+          user_id: null,
+          event_type: 'TOKEN_REFRESH_FAILED',
+          ip_address: req.ip,
+          user_agent: req.headers['user-agent'] || null,
+          event_details: { reason: "Invalid refresh token signature" },
+          resource_type: 'session',
+          resource_id: null,
+          status: 'FAILED'
+        });
+        
         return res.status(401).json({ message: "Invalid refresh token" });
       }
       
       // Check if the refresh token exists in the database
       const session = await storage.getSessionByRefreshToken(refreshToken);
       if (!session) {
+        // Log failed token refresh - token not found in database
+        await storage.createAuditLog({
+          user_id: userId,
+          event_type: 'TOKEN_REFRESH_FAILED',
+          ip_address: req.ip,
+          user_agent: req.headers['user-agent'] || null,
+          event_details: { reason: "Refresh token not found in database" },
+          resource_type: 'session',
+          resource_id: null,
+          status: 'FAILED'
+        });
+        
         return res.status(401).json({ message: "Invalid refresh token" });
       }
       
       // Get user data
       const user = await storage.getUser(userId);
       if (!user || !user.isActive) {
+        // Log failed token refresh - user not found or inactive
+        await storage.createAuditLog({
+          user_id: userId,
+          event_type: 'TOKEN_REFRESH_FAILED',
+          ip_address: req.ip,
+          user_agent: req.headers['user-agent'] || null,
+          event_details: { 
+            reason: !user ? "User not found" : "User account inactive"
+          },
+          resource_type: 'user',
+          resource_id: userId.toString(),
+          status: 'FAILED'
+        });
+        
         return res.status(401).json({ message: "User not found or inactive" });
       }
       
@@ -441,12 +479,52 @@ export function setupAuth(app: Express) {
         expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
       });
       
+      // Log token refresh
+      await storage.createAuditLog({
+        user_id: user.id,
+        event_type: 'TOKEN_REFRESH',
+        ip_address: req.ip,
+        user_agent: req.headers['user-agent'] || null,
+        event_details: { 
+          username: user.username,
+          email: user.email
+        },
+        resource_type: 'session',
+        resource_id: session.id.toString(),
+        status: 'SUCCESS'
+      });
+      
       res.json({
         token: newToken,
         refreshToken: newRefreshToken,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Refresh token error:", error);
+      
+      // Log token refresh error
+      try {
+        // Try to extract user ID from the token if possible
+        let userId = null;
+        try {
+          userId = validateRefreshToken(refreshToken);
+        } catch (e) {
+          // Ignore error, just means we can't identify the user
+        }
+        
+        await storage.createAuditLog({
+          user_id: userId,
+          event_type: 'TOKEN_REFRESH_ERROR',
+          ip_address: req.ip,
+          user_agent: req.headers['user-agent'] || null,
+          event_details: { error: error.message || 'Unknown error' },
+          resource_type: 'session',
+          resource_id: null,
+          status: 'ERROR'
+        });
+      } catch (logError) {
+        console.error("Failed to log token refresh error:", logError);
+      }
+      
       res.status(500).json({ message: "Failed to refresh token" });
     }
   });
@@ -467,11 +545,52 @@ export function setupAuth(app: Express) {
     }
     
     try {
+      // Get user ID from the token
+      const payload = validateJwtToken(token);
+      if (!payload) {
+        return res.status(401).json({ message: "Invalid token" });
+      }
+      
       // Remove session
       await storage.deleteSessionByToken(token);
+      
+      // Log successful logout
+      await storage.createAuditLog({
+        user_id: payload.userId,
+        event_type: 'LOGOUT',
+        ip_address: req.ip,
+        user_agent: req.headers['user-agent'] || null,
+        event_details: { 
+          username: payload.username
+        },
+        resource_type: 'session',
+        resource_id: null,
+        status: 'SUCCESS'
+      });
+      
       res.json({ message: "Logged out successfully" });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Logout error:", error);
+      
+      // Log logout error (best effort - might not have user ID)
+      try {
+        const payload = validateJwtToken(token);
+        if (payload) {
+          await storage.createAuditLog({
+            user_id: payload.userId,
+            event_type: 'LOGOUT_ERROR',
+            ip_address: req.ip,
+            user_agent: req.headers['user-agent'] || null,
+            event_details: { error: error.message || 'Unknown error' },
+            resource_type: 'session',
+            resource_id: null,
+            status: 'ERROR'
+          });
+        }
+      } catch (logError) {
+        console.error("Failed to log logout error:", logError);
+      }
+      
       res.status(500).json({ message: "Failed to logout" });
     }
   });
@@ -636,6 +755,21 @@ export function setupAuth(app: Express) {
         expires_at: expiresAt,
       });
       
+      // Log password reset request
+      await storage.createAuditLog({
+        user_id: user.id,
+        event_type: 'PASSWORD_RESET_REQUESTED',
+        ip_address: req.ip,
+        user_agent: req.headers['user-agent'] || null,
+        event_details: { 
+          email: user.email,
+          expires_at: expiresAt.toISOString()
+        },
+        resource_type: 'user',
+        resource_id: user.id.toString(),
+        status: 'SUCCESS'
+      });
+      
       // In production, you would send an email with the reset link
       // For now, we just return the token for testing
       res.json({
@@ -712,6 +846,21 @@ export function setupAuth(app: Express) {
       
       // Log out other sessions (recommended for security)
       await storage.invalidateAllUserSessions(user.id);
+      
+      // Log successful password reset
+      await storage.createAuditLog({
+        user_id: user.id,
+        event_type: 'PASSWORD_RESET_COMPLETED',
+        ip_address: req.ip,
+        user_agent: req.headers['user-agent'] || null,
+        event_details: { 
+          email: user.email,
+          sessions_invalidated: true
+        },
+        resource_type: 'user',
+        resource_id: user.id.toString(),
+        status: 'SUCCESS'
+      });
       
       res.json({ message: "Password has been reset successfully" });
     } catch (error) {
