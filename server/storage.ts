@@ -4,7 +4,7 @@ import {
   User, InsertUser, Role, InsertRole, 
   AuthUser, InsertAuthUser, AuthSession, InsertAuthSession,
   Auth2FA, InsertAuth2FA, AuthPasswordReset, InsertAuthPasswordReset,
-  UpsertAuthUser
+  AuthAuditLog, InsertAuthAuditLog, UpsertAuthUser
 } from "@shared/schema";
 
 // Define storage interface
@@ -49,6 +49,12 @@ export interface IStorage {
   createPasswordReset(resetData: InsertAuthPasswordReset): Promise<AuthPasswordReset>;
   getPasswordResetByToken(token: string): Promise<AuthPasswordReset | undefined>;
   markPasswordResetUsed(token: string): Promise<void>;
+  
+  // Audit logging
+  createAuditLog(logData: InsertAuthAuditLog): Promise<AuthAuditLog>;
+  getAuditLogsByUser(userId: number, limit?: number, offset?: number): Promise<AuthAuditLog[]>;
+  getAuditLogsByEventType(eventType: string, limit?: number, offset?: number): Promise<AuthAuditLog[]>;
+  getAuditLogs(limit?: number, offset?: number): Promise<AuthAuditLog[]>;
 }
 
 // In-memory storage implementation
@@ -59,12 +65,14 @@ export class MemStorage implements IStorage {
   private sessions: AuthSession[] = [];
   private twoFactorAuth: Auth2FA[] = [];
   private passwordResets: AuthPasswordReset[] = [];
+  private auditLogs: AuthAuditLog[] = [];
   
   private nextUserId = 1;
   private nextRoleId = 1;
   private nextSessionId = 1;
   private nextTwoFactorId = 1;
   private nextPasswordResetId = 1;
+  private nextAuditLogId = 1;
 
   constructor() {
     this.schema = databaseSchema;
@@ -402,6 +410,49 @@ export class MemStorage implements IStorage {
     if (passwordReset) {
       passwordReset.used_at = new Date();
     }
+  }
+  
+  // Audit logging
+  async createAuditLog(logData: InsertAuthAuditLog): Promise<AuthAuditLog> {
+    const auditLog: AuthAuditLog = {
+      id: this.nextAuditLogId++,
+      user_id: logData.user_id,
+      event_type: logData.event_type,
+      event_timestamp: new Date(),
+      ip_address: logData.ip_address || null,
+      user_agent: logData.user_agent || null,
+      event_details: logData.event_details || null,
+      resource_type: logData.resource_type || null,
+      resource_id: logData.resource_id || null,
+      status: logData.status
+    };
+    
+    this.auditLogs.push(auditLog);
+    return auditLog;
+  }
+  
+  async getAuditLogsByUser(userId: number, limit: number = 100, offset: number = 0): Promise<AuthAuditLog[]> {
+    const userLogs = this.auditLogs
+      .filter(log => log.user_id === userId)
+      .sort((a, b) => b.event_timestamp.getTime() - a.event_timestamp.getTime());
+    
+    return userLogs.slice(offset, offset + limit);
+  }
+  
+  async getAuditLogsByEventType(eventType: string, limit: number = 100, offset: number = 0): Promise<AuthAuditLog[]> {
+    const eventLogs = this.auditLogs
+      .filter(log => log.event_type === eventType)
+      .sort((a, b) => b.event_timestamp.getTime() - a.event_timestamp.getTime());
+    
+    return eventLogs.slice(offset, offset + limit);
+  }
+  
+  async getAuditLogs(limit: number = 100, offset: number = 0): Promise<AuthAuditLog[]> {
+    const sortedLogs = [...this.auditLogs].sort((a, b) => 
+      b.event_timestamp.getTime() - a.event_timestamp.getTime()
+    );
+    
+    return sortedLogs.slice(offset, offset + limit);
   }
 }
 

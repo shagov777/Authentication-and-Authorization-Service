@@ -116,6 +116,26 @@ export const auth_password_resets = pgTable("auth_password_resets", {
   used_at: timestamp("used_at"),
 });
 
+// Audit log for security events
+export const auth_audit_logs = pgTable("auth_audit_logs", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").references(() => auth_users.id),
+  event_type: varchar("event_type", { length: 50 }).notNull(),
+  event_timestamp: timestamp("event_timestamp").defaultNow().notNull(),
+  ip_address: varchar("ip_address", { length: 50 }),
+  user_agent: text("user_agent"),
+  event_details: json("event_details"),
+  resource_type: varchar("resource_type", { length: 50 }),
+  resource_id: varchar("resource_id", { length: 50 }),
+  status: varchar("status", { length: 20 }).notNull(),
+}, (table) => {
+  return {
+    userIdx: index("idx_audit_logs_user_id").on(table.user_id),
+    eventTypeIdx: index("idx_audit_logs_event_type").on(table.event_type),
+    eventTimestampIdx: index("idx_audit_logs_timestamp").on(table.event_timestamp),
+  }
+});
+
 // Original sessions table - keeping for compatibility
 export const sessions = pgTable(
   "sessions",
@@ -156,6 +176,10 @@ export const insertAuthPasswordResetSchema = createInsertSchema(auth_password_re
   created_at: true, 
   used_at: true 
 });
+export const insertAuthAuditLogSchema = createInsertSchema(auth_audit_logs).omit({
+  id: true,
+  event_timestamp: true
+});
 export const insertSessionSchema = createInsertSchema(sessions);
 
 // Types
@@ -187,6 +211,8 @@ export type Auth2FA = typeof auth_2fa.$inferSelect;
 export type InsertAuth2FA = z.infer<typeof insertAuth2faSchema>;
 export type AuthPasswordReset = typeof auth_password_resets.$inferSelect;
 export type InsertAuthPasswordReset = z.infer<typeof insertAuthPasswordResetSchema>;
+export type AuthAuditLog = typeof auth_audit_logs.$inferSelect;
+export type InsertAuthAuditLog = z.infer<typeof insertAuthAuditLogSchema>;
 
 export type UpsertAuthUser = {
   username: string;
