@@ -1,11 +1,9 @@
 import { databaseSchema } from "../shared/database-schema";
 import { DbModule, DbSchema, DbTable, generateSQL } from "@/lib/utils";
-import { InsertUser, User } from "@shared/schema";
+import { User, UpsertUser } from "@shared/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
-import { users, sessions } from "@shared/schema";
-import { randomBytes, scrypt, timingSafeEqual } from "crypto";
-import { promisify } from "util";
+import { users } from "@shared/schema";
 
 // Define storage interface
 export interface IStorage {
@@ -18,30 +16,10 @@ export interface IStorage {
   generateSqlForModule(moduleId: string): Promise<string>;
   generateSqlForAllModules(): Promise<string>;
   
-  // User authentication operations
-  createUser(user: InsertUser): Promise<User>;
+  // User operations
+  getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
-  getUserById(id: number): Promise<User | null>;
-  validateUser(username: string, password: string): Promise<User | null>;
-  createSession(userId: number): Promise<string>;
-  validateSession(token: string): Promise<User | null>;
-  deleteSession(token: string): Promise<void>;
-}
-
-// Helper functions for password management
-const scryptAsync = promisify(scrypt);
-
-async function hashPassword(password: string): Promise<string> {
-  const salt = randomBytes(16).toString('hex');
-  const derivedKey = await scryptAsync(password, salt, 64) as Buffer;
-  return `${derivedKey.toString('hex')}.${salt}`;
-}
-
-async function verifyPassword(storedPassword: string, suppliedPassword: string): Promise<boolean> {
-  const [hashedPassword, salt] = storedPassword.split('.');
-  const derivedKey = await scryptAsync(suppliedPassword, salt, 64) as Buffer;
-  const suppliedHashedPassword = derivedKey.toString('hex');
-  return timingSafeEqual(Buffer.from(hashedPassword, 'hex'), Buffer.from(suppliedHashedPassword, 'hex'));
+  createUser(userData: InsertUser): Promise<User>;
 }
 
 // In-memory storage implementation
@@ -158,78 +136,26 @@ export class MemStorage implements IStorage {
     return sql;
   }
 
-  // User authentication methods
-  async createUser(userData: InsertUser): Promise<User> {
-    // Hash the password before storing
-    const hashedPassword = await hashPassword(userData.password);
-    
-    // Insert user into database
+  // User operations for Replit Auth
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async upsertUser(userData: UpsertUser): Promise<User> {
     const [user] = await db
       .insert(users)
-      .values({ ...userData, password: hashedPassword })
+      .values(userData)
+      .onConflictDoUpdate({
+        target: users.id,
+        set: {
+          ...userData,
+          updatedAt: new Date()
+        }
+      })
       .returning();
     
     return user;
-  }
-
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
-    return user;
-  }
-
-  async getUserById(id: number): Promise<User | null> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user || null;
-  }
-
-  async validateUser(username: string, password: string): Promise<User | null> {
-    const user = await this.getUserByUsername(username);
-    
-    if (!user) {
-      return null;
-    }
-    
-    const isValid = await verifyPassword(user.password, password);
-    return isValid ? user : null;
-  }
-
-  async createSession(userId: number): Promise<string> {
-    const token = randomBytes(32).toString('hex');
-    const expiresAt = new Date();
-    // Sessions expire after 24 hours
-    expiresAt.setDate(expiresAt.getDate() + 1);
-    
-    await db.insert(sessions).values({
-      userId,
-      token,
-      expiresAt
-    });
-    
-    return token;
-  }
-
-  async validateSession(token: string): Promise<User | null> {
-    const [session] = await db
-      .select()
-      .from(sessions)
-      .where(eq(sessions.token, token));
-    
-    if (!session) {
-      return null;
-    }
-    
-    // Check if session is expired
-    if (new Date() > session.expiresAt) {
-      await this.deleteSession(token);
-      return null;
-    }
-    
-    const user = await this.getUserById(session.userId);
-    return user || null;
-  }
-
-  async deleteSession(token: string): Promise<void> {
-    await db.delete(sessions).where(eq(sessions.token, token));
   }
 }
 
