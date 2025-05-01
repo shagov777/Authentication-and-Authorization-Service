@@ -622,9 +622,8 @@ export function setupAuth(app: Express) {
       // Mark the reset token as used
       await storage.markPasswordResetUsed(token);
       
-      // Log out other sessions (optional but recommended for security)
-      // This would require implementing a new method in storage
-      // await storage.invalidateAllUserSessions(user.id);
+      // Log out other sessions (recommended for security)
+      await storage.invalidateAllUserSessions(user.id);
       
       res.json({ message: "Password has been reset successfully" });
     } catch (error) {

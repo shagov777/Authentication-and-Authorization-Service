@@ -12,7 +12,12 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./auth";
-import { setupAuth as setupEnterpriseAuth, jwtAuthMiddleware } from "./authentication";
+import { 
+  setupAuth as setupEnterpriseAuth, 
+  jwtAuthMiddleware, 
+  comparePasswords,
+  hashPassword
+} from "./authentication";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up standard session-based authentication
@@ -96,6 +101,182 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+  
+  /**
+   * Get current user's detailed profile
+   * GET /auth/profile
+   * Protected: Yes (JWT)
+   * Response: User profile object with extended information
+   */
+  app.get('/auth/profile', jwtAuthMiddleware, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Get user's 2FA status
+      const twoFactorAuth = await storage.getTwoFactorAuth(userId);
+      
+      // Return profile information including 2FA status
+      res.json({
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        mobile_number: user.mobile_number,
+        role: user.role,
+        isActive: user.isActive,
+        createdAt: user.createdAt,
+        lastLogin: user.lastLogin,
+        twoFactorEnabled: twoFactorAuth?.is_enabled || false
+      });
+    } catch (error) {
+      console.error("Error fetching profile:", error);
+      res.status(500).json({ message: "Failed to fetch profile" });
+    }
+  });
+  
+  /**
+   * Update current user's profile
+   * PUT /auth/profile
+   * Protected: Yes (JWT)
+   * Request body: { username?, email?, mobile_number? }
+   * Response: Updated user profile
+   */
+  app.put('/auth/profile', jwtAuthMiddleware, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const { username, email, mobile_number } = req.body;
+      
+      // Validate input
+      if (email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+          return res.status(400).json({ message: "Invalid email format" });
+        }
+        
+        // Check if email is already in use by another user
+        const existingUser = await storage.getUserByEmail(email);
+        if (existingUser && existingUser.id !== userId) {
+          return res.status(409).json({ message: "Email is already in use" });
+        }
+      }
+      
+      if (username) {
+        // Check if username is already in use by another user
+        const existingUser = await storage.getUserByUsername(username);
+        if (existingUser && existingUser.id !== userId) {
+          return res.status(409).json({ message: "Username is already in use" });
+        }
+      }
+      
+      // Update user profile
+      const updatedUser = await storage.updateUser(userId, {
+        ...(username && { username }),
+        ...(email && { email }),
+        ...(mobile_number !== undefined && { mobile_number })
+      });
+      
+      // Get user's 2FA status
+      const twoFactorAuth = await storage.getTwoFactorAuth(userId);
+      
+      // Return updated profile
+      res.json({
+        id: updatedUser.id,
+        username: updatedUser.username,
+        email: updatedUser.email,
+        mobile_number: updatedUser.mobile_number,
+        role: updatedUser.role,
+        isActive: updatedUser.isActive,
+        createdAt: updatedUser.createdAt,
+        lastLogin: updatedUser.lastLogin,
+        twoFactorEnabled: twoFactorAuth?.is_enabled || false
+      });
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      res.status(500).json({ message: "Failed to update profile" });
+    }
+  });
+  
+  /**
+   * Change user password
+   * PUT /auth/change-password
+   * Protected: Yes (JWT)
+   * Request body: { currentPassword, newPassword }
+   * Response: Success message
+   */
+  app.put('/auth/change-password', jwtAuthMiddleware, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const { currentPassword, newPassword } = req.body;
+      
+      // Validate input
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ 
+          message: "Missing required fields",
+          errors: {
+            currentPassword: !currentPassword ? "Current password is required" : null,
+            newPassword: !newPassword ? "New password is required" : null,
+          }
+        });
+      }
+      
+      // Get user
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Validate current password
+      const isCurrentPasswordValid = await comparePasswords(currentPassword, user.password);
+      if (!isCurrentPasswordValid) {
+        return res.status(401).json({ message: "Current password is incorrect" });
+      }
+      
+      // Validate new password strength
+      const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+      if (!passwordRegex.test(newPassword)) {
+        return res.status(400).json({
+          message: "Password is too weak",
+          requirements: "Password must be at least 8 characters long and include uppercase, lowercase, numbers, and special characters"
+        });
+      }
+      
+      // Hash new password
+      const hashedPassword = await hashPassword(newPassword);
+      
+      // Update user's password
+      await storage.updateUser(userId, { 
+        password: hashedPassword,
+        updatedAt: new Date()
+      });
+      
+      // Invalidate all other sessions for security
+      await storage.invalidateAllUserSessions(userId);
+      
+      // Return success
+      res.json({ 
+        message: "Password changed successfully",
+        note: "For security reasons, you'll need to log in again with your new password"
+      });
+    } catch (error) {
+      console.error("Error changing password:", error);
+      res.status(500).json({ message: "Failed to change password" });
     }
   });
   
