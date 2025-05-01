@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -13,6 +13,7 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import { DbTable, DbRelationship } from '@/lib/utils';
 import { Key, Link } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 interface SchemaFlowProps {
   tables: DbTable[];
@@ -69,6 +70,8 @@ export default function SchemaFlow({
 }: SchemaFlowProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Generate a layout for the nodes (basic grid layout) - memoized
   const generateLayout = useCallback((tables: DbTable[]) => {
@@ -115,12 +118,15 @@ export default function SchemaFlow({
   const generateEdges = useCallback(() => {
     const edges: Edge[] = [];
     
+    // Only add edges if React Flow has been initialized
+    if (!isInitialized) return edges;
+    
     // Generate edges from foreign keys that exist in our tables
     tables.forEach(table => {
       table.columns.forEach(column => {
         if (column.isForeignKey && column.references && tableNames.includes(column.references.table)) {
           edges.push({
-            id: `fk-${table.name}-${column.name}`,
+            id: `fk-${table.name}-${column.name}-${Math.random().toString(36).slice(2, 7)}`,
             source: table.name,
             target: column.references.table,
             type: 'default', // explicit default type
@@ -143,7 +149,7 @@ export default function SchemaFlow({
     // Add filtered relationships
     filteredRelationships.forEach((rel, index) => {
       edges.push({
-        id: `rel-${index}`,
+        id: `rel-${index}-${Math.random().toString(36).slice(2, 7)}`,
         source: rel.source,
         target: rel.target,
         type: 'default', // explicit default type
@@ -162,15 +168,33 @@ export default function SchemaFlow({
     });
     
     return edges;
-  }, [tables, tableNames, filteredRelationships]);
+  }, [tables, tableNames, filteredRelationships, isInitialized]);
 
-  // Update nodes and edges when tables or relationships change
+  // Initialize nodes on mount with a slight delay to prevent flashing
   useEffect(() => {
     if (tables.length > 0) {
+      // First set the nodes without edges
       setNodes(generateLayout(tables));
+      
+      // Set loading state to show loading spinner
+      setIsLoading(true);
+      
+      // Use timeout to delay edge creation until nodes are rendered
+      const timer = setTimeout(() => {
+        setIsInitialized(true);
+        setIsLoading(false);
+      }, 300);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [tables, generateLayout, setNodes]);
+
+  // Update edges only after nodes are initialized
+  useEffect(() => {
+    if (isInitialized) {
       setEdges(generateEdges());
     }
-  }, [tables, generateLayout, generateEdges, setNodes, setEdges]);
+  }, [isInitialized, generateEdges, setEdges]);
 
   // Update node selection when selectedTable changes
   useEffect(() => {
@@ -185,6 +209,14 @@ export default function SchemaFlow({
   const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     onSelectTable(node.id);
   }, [onSelectTable]);
+
+  if (isLoading) {
+    return (
+      <div className="h-full w-full flex items-center justify-center bg-secondary/30">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="h-full w-full">
@@ -201,6 +233,9 @@ export default function SchemaFlow({
         maxZoom={2}
         deleteKeyCode={null}
         multiSelectionKeyCode={null}
+        proOptions={{ hideAttribution: true }}
+        fitViewOptions={{ padding: 0.2 }}
+        defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
       >
         <Controls />
         <Background gap={16} size={1} />
