@@ -183,6 +183,18 @@ export function setupAuth(app: Express) {
       // Check for existing user
       const existingUser = await storage.getUserByEmail(email);
       if (existingUser) {
+        // Log failed registration attempt due to existing email
+        await storage.createAuditLog({
+          user_id: null,
+          event_type: 'USER_REGISTRATION_ATTEMPT',
+          ip_address: req.ip,
+          user_agent: req.headers['user-agent'] || null,
+          event_details: { email, reason: 'EMAIL_EXISTS' },
+          resource_type: 'user',
+          resource_id: null,
+          status: 'FAILED'
+        });
+        
         return res.status(409).json({ message: "Email already exists" });
       }
       
@@ -226,6 +238,22 @@ export function setupAuth(app: Express) {
         expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
       });
       
+      // Log successful registration
+      await storage.createAuditLog({
+        user_id: newUser.id,
+        event_type: 'USER_REGISTRATION',
+        ip_address: req.ip,
+        user_agent: req.headers['user-agent'] || null,
+        event_details: { 
+          username: newUser.username, 
+          email: newUser.email, 
+          role: newUser.role 
+        },
+        resource_type: 'user',
+        resource_id: newUser.id.toString(),
+        status: 'SUCCESS'
+      });
+      
       // Return user data and tokens
       res.status(201).json({
         message: "User registered successfully",
@@ -238,8 +266,21 @@ export function setupAuth(app: Express) {
         token,
         refreshToken,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Registration error:", error);
+      
+      // Log registration error
+      await storage.createAuditLog({
+        user_id: null,
+        event_type: 'USER_REGISTRATION_ERROR',
+        ip_address: req.ip,
+        user_agent: req.headers['user-agent'] || null,
+        event_details: { error: error.message || 'Unknown error' },
+        resource_type: 'user',
+        resource_id: null,
+        status: 'ERROR'
+      });
+      
       res.status(500).json({ message: "Failed to register user" });
     }
   });
@@ -255,6 +296,21 @@ export function setupAuth(app: Express) {
     passport.authenticate("local", async (err: any, user: any, info: any) => {
       if (err) return next(err);
       if (!user) {
+        // Log failed login attempt
+        await storage.createAuditLog({
+          user_id: null,
+          event_type: 'LOGIN_FAILED',
+          ip_address: req.ip,
+          user_agent: req.headers['user-agent'] || null,
+          event_details: { 
+            reason: info?.message || "Invalid credentials",
+            email: req.body.email 
+          },
+          resource_type: 'user',
+          resource_id: null,
+          status: 'FAILED'
+        });
+        
         return res.status(401).json({ 
           message: info?.message || "Invalid credentials" 
         });
@@ -285,6 +341,22 @@ export function setupAuth(app: Express) {
         // Update last login time
         await storage.updateUserLastLogin(user.id);
         
+        // Log successful login
+        await storage.createAuditLog({
+          user_id: user.id,
+          event_type: 'LOGIN_SUCCESS',
+          ip_address: req.ip,
+          user_agent: req.headers['user-agent'] || null,
+          event_details: { 
+            username: user.username, 
+            email: user.email,
+            role: user.role
+          },
+          resource_type: 'user',
+          resource_id: user.id.toString(),
+          status: 'SUCCESS'
+        });
+        
         res.json({
           message: "Login successful",
           user: {
@@ -296,8 +368,24 @@ export function setupAuth(app: Express) {
           token,
           refreshToken,
         });
-      } catch (error) {
+      } catch (error: any) {
         console.error("Login error:", error);
+        
+        // Log login error
+        await storage.createAuditLog({
+          user_id: user.id,
+          event_type: 'LOGIN_ERROR',
+          ip_address: req.ip,
+          user_agent: req.headers['user-agent'] || null,
+          event_details: { 
+            error: error.message || 'Unknown error',
+            username: user.username 
+          },
+          resource_type: 'user',
+          resource_id: user.id.toString(),
+          status: 'ERROR'
+        });
+        
         res.status(500).json({ message: "Failed to log in" });
       }
     })(req, res, next);
