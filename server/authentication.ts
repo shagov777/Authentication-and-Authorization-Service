@@ -612,6 +612,20 @@ export function setupAuth(app: Express) {
       // Save to database (setup but not enabled yet)
       const twoFactorAuth = await storage.setupTwoFactorAuth(userId, totpSecret);
       
+      // Log 2FA setup
+      await storage.createAuditLog({
+        user_id: userId,
+        event_type: '2FA_SETUP',
+        ip_address: req.ip,
+        user_agent: req.headers['user-agent'] || null,
+        event_details: { 
+          is_enabled: false
+        },
+        resource_type: 'user',
+        resource_id: userId.toString(),
+        status: 'SUCCESS'
+      });
+      
       res.json({
         message: "2FA setup initiated",
         secret: totpSecret,
@@ -666,6 +680,18 @@ export function setupAuth(app: Express) {
       // Enable 2FA for the user
       await storage.updateTwoFactorAuth(userId, { is_enabled: true });
       
+      // Log 2FA verification & enabling
+      await storage.createAuditLog({
+        user_id: userId,
+        event_type: '2FA_ENABLED',
+        ip_address: req.ip,
+        user_agent: req.headers['user-agent'] || null,
+        event_details: {},
+        resource_type: 'user',
+        resource_id: userId.toString(),
+        status: 'SUCCESS'
+      });
+      
       res.json({
         message: "2FA successfully enabled",
         isEnabled: true
@@ -710,6 +736,18 @@ export function setupAuth(app: Express) {
       await storage.updateTwoFactorAuth(userId, { 
         is_enabled: false,
         totp_secret: null // Optionally clear the secret
+      });
+      
+      // Log 2FA disabling
+      await storage.createAuditLog({
+        user_id: userId,
+        event_type: '2FA_DISABLED',
+        ip_address: req.ip,
+        user_agent: req.headers['user-agent'] || null,
+        event_details: {},
+        resource_type: 'user',
+        resource_id: userId.toString(),
+        status: 'SUCCESS'
       });
       
       res.json({

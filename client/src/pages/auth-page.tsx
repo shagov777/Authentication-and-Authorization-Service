@@ -10,8 +10,8 @@ import { Loader2 } from "lucide-react";
 
 export default function AuthPage() {
   const { user, isLoading, login, register, loginStatus, registerStatus } = useAuth();
-  const [loginData, setLoginData] = useState({ username: "", password: "" });
-  const [registerData, setRegisterData] = useState({ username: "", email: "", password: "", roleId: 2 });
+  const [loginData, setLoginData] = useState({ email: "", password: "" });
+  const [registerData, setRegisterData] = useState({ username: "", email: "", password: "", role: "user" });
   
   // Redirect if already logged in
   if (user) {
@@ -75,14 +75,14 @@ export default function AuthPage() {
               <form onSubmit={handleLogin}>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="username">Username</Label>
+                    <Label htmlFor="email">Email</Label>
                     <Input 
-                      id="username" 
-                      type="text" 
-                      placeholder="Username" 
+                      id="email" 
+                      type="email" 
+                      placeholder="Email" 
                       required 
-                      value={loginData.username}
-                      onChange={(e) => setLoginData({ ...loginData, username: e.target.value })}
+                      value={loginData.email}
+                      onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
                     />
                   </div>
                   <div className="space-y-2">
