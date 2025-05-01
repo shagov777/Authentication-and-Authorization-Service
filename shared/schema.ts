@@ -50,6 +50,13 @@ export const relationshipSchema = pgTable("db_relationships", {
 });
 
 // User Authentication Tables
+export const roles = pgTable("roles", {
+  id: serial("id").primaryKey(),
+  name: varchar("name").unique().notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: varchar("username").unique().notNull(),
@@ -59,6 +66,9 @@ export const users = pgTable("users", {
   lastName: varchar("last_name"),
   bio: text("bio"),
   profileImageUrl: varchar("profile_image_url"),
+  roleId: integer("role_id").references(() => roles.id),
+  isActive: boolean("is_active").default(true),
+  lastLogin: timestamp("last_login"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -80,8 +90,9 @@ export const insertIndexSchema = createInsertSchema(indexSchema).omit({ id: true
 export const insertModuleSchema = createInsertSchema(moduleSchema).omit({ id: true });
 export const insertRelationshipSchema = createInsertSchema(relationshipSchema).omit({ id: true });
 
-// User Insert schemas
-export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, updatedAt: true });
+// Role and User Insert schemas
+export const insertRoleSchema = createInsertSchema(roles).omit({ id: true, createdAt: true });
+export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, updatedAt: true, lastLogin: true });
 export const insertSessionSchema = createInsertSchema(sessions).omit({ id: true, createdAt: true });
 
 // Types
@@ -100,6 +111,10 @@ export type InsertModule = z.infer<typeof insertModuleSchema>;
 export type Relationship = typeof relationshipSchema.$inferSelect;
 export type InsertRelationship = z.infer<typeof insertRelationshipSchema>;
 
+// Role Types
+export type Role = typeof roles.$inferSelect;
+export type InsertRole = z.infer<typeof insertRoleSchema>;
+
 // User Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -111,6 +126,8 @@ export type UpsertUser = {
   lastName?: string;
   bio?: string;
   profileImageUrl?: string;
+  roleId?: number;
+  isActive?: boolean;
 };
 
 export type CreateUser = Omit<UpsertUser, 'password'> & {

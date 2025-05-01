@@ -1,6 +1,6 @@
 import { databaseSchema } from "../shared/database-schema";
 import { DbModule, DbSchema, DbTable, generateSQL } from "@/lib/utils";
-import { User, InsertUser } from "@shared/schema";
+import { User, InsertUser, Role, InsertRole } from "@shared/schema";
 
 // Define storage interface
 export interface IStorage {
@@ -17,14 +17,36 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(userData: InsertUser): Promise<User>;
+  getAllUsers(): Promise<User[]>;
+  createRole(roleData: InsertRole): Promise<Role>;
+  getAllRoles(): Promise<Role[]>;
 }
 
 // In-memory storage implementation
 export class MemStorage implements IStorage {
   private schema: DbSchema;
+  private users: User[] = [];
+  private roles: Role[] = [];
+  private nextUserId = 1;
+  private nextRoleId = 1;
 
   constructor() {
     this.schema = databaseSchema;
+    
+    // Add default roles
+    this._initializeRoles();
+  }
+
+  private async _initializeRoles() {
+    await this.createRole({
+      name: "admin",
+      description: "Administrator with full access"
+    });
+    
+    await this.createRole({
+      name: "user",
+      description: "Regular user with limited access"
+    });
   }
 
   // Schema-related methods
@@ -134,15 +156,16 @@ export class MemStorage implements IStorage {
   }
 
   // User operations for standard authentication
-  private users: User[] = [];
-  private nextUserId = 1;
-
   async getUser(id: number): Promise<User | undefined> {
     return this.users.find(user => user.id === id);
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
     return this.users.find(user => user.username === username);
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return [...this.users];
   }
 
   async createUser(userData: InsertUser): Promise<User> {
@@ -155,12 +178,31 @@ export class MemStorage implements IStorage {
       lastName: userData.lastName || null,
       bio: userData.bio || null,
       profileImageUrl: userData.profileImageUrl || null,
+      roleId: userData.roleId || 2, // Default to 'user' role if not specified
+      isActive: userData.isActive !== undefined ? userData.isActive : true,
+      lastLogin: null,
       createdAt: new Date(),
       updatedAt: new Date()
     };
     
     this.users.push(newUser);
     return newUser;
+  }
+
+  async createRole(roleData: InsertRole): Promise<Role> {
+    const role: Role = {
+      id: this.nextRoleId++,
+      name: roleData.name,
+      description: roleData.description || null,
+      createdAt: new Date(),
+    };
+    
+    this.roles.push(role);
+    return role;
+  }
+
+  async getAllRoles(): Promise<Role[]> {
+    return [...this.roles];
   }
 }
 
