@@ -12,10 +12,14 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./auth";
+import { setupAuth as setupEnterpriseAuth, jwtAuthMiddleware } from "./authentication";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Set up standard authentication
+  // Set up standard session-based authentication
   setupAuth(app);
+  
+  // Additionally set up enterprise-grade JWT authentication
+  setupEnterpriseAuth(app);
   
   /**
    * User Management API
@@ -60,6 +64,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching users:", error);
       res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+  
+  /**
+   * Get current authenticated user using JWT authentication
+   * GET /auth/user
+   * Protected: Yes (JWT)
+   * Response: User object (excluding password)
+   */
+  app.get('/auth/user', jwtAuthMiddleware, async (req, res) => {
+    try {
+      const userId = (req as any).userId;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Only return non-sensitive user information
+      res.json({
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        isActive: user.isActive
+      });
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
     }
   });
   

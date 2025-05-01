@@ -156,7 +156,7 @@ export const insertAuthPasswordResetSchema = createInsertSchema(auth_password_re
   created_at: true, 
   used_at: true 
 });
-export const insertSessionSchema = createInsertSchema(sessions).omit({ id: true, createdAt: true });
+export const insertSessionSchema = createInsertSchema(sessions);
 
 // Types
 export type Table = typeof tableSchema.$inferSelect;
