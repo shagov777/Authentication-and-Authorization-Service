@@ -13,8 +13,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Only send non-sensitive user information
     res.json({
       id: user.id,
-      username: user.username
+      username: user.username,
+      email: user.email,
+      roleId: user.roleId,
+      isActive: user.isActive
     });
+  });
+  
+  // API for user management (test bench)
+  app.get('/api/users', isAuthenticated, async (req, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      // Filter out passwords for security
+      const safeUsers = users.map(user => ({
+        ...user,
+        password: undefined
+      }));
+      res.json(safeUsers);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+  
+  app.get('/api/roles', async (req, res) => {
+    try {
+      const roles = await storage.getAllRoles();
+      res.json(roles);
+    } catch (error) {
+      console.error("Error fetching roles:", error);
+      res.status(500).json({ message: "Failed to fetch roles" });
+    }
   });
   
   // Schema routes

@@ -5,6 +5,9 @@ import { useToast } from "./use-toast";
 interface AuthUser {
   id: number;
   username: string;
+  email: string | null;
+  roleId: number | null;
+  isActive: boolean | null;
 }
 
 interface LoginData {
@@ -12,8 +15,11 @@ interface LoginData {
   password: string;
 }
 
-interface RegisterData extends LoginData {
-  email?: string;
+interface RegisterData {
+  username: string;
+  email: string;
+  password: string;
+  roleId: number;
 }
 
 export function useAuth() {
