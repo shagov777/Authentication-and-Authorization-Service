@@ -63,6 +63,21 @@ const registerSchema = z.object({
   roleId: z.string().transform(val => parseInt(val, 10)),
 });
 
+// Define interface for Role and User
+interface Role {
+  id: number;
+  name: string;
+  description?: string;
+}
+
+interface User {
+  id: number;
+  username: string;
+  email: string | null;
+  roleId: number | null;
+  isActive: boolean | null;
+}
+
 type LoginFormValues = z.infer<typeof loginSchema>;
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
@@ -92,22 +107,22 @@ export default function TestBench() {
 
   // Fetch roles
   const {
-    data: roles = [],
+    data: roles = [] as Role[],
     isLoading: rolesLoading,
     error: rolesError,
-  } = useQuery({
+  } = useQuery<Role[]>({
     queryKey: ["/api/roles"],
-    queryFn: getQueryFn(),
+    queryFn: getQueryFn({ on401: "throw" }),
   });
 
   // Fetch users
   const {
-    data: users = [],
+    data: users = [] as User[],
     isLoading: usersLoading,
     error: usersError,
-  } = useQuery({
+  } = useQuery<User[]>({
     queryKey: ["/api/users"],
-    queryFn: getQueryFn(),
+    queryFn: getQueryFn({ on401: "throw" }),
     enabled: !!user, // Only fetch if user is logged in
   });
 

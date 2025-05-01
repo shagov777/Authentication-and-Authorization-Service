@@ -74,26 +74,29 @@ export default function DatabaseVisualizer() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar
-        currentModule={currentModule}
-        onModuleChange={handleModuleChange}
-        onViewChange={handleViewChange}
-        currentView={currentView}
-      />
-      <div className="flex-1 overflow-x-hidden overflow-y-auto ml-64">
-        <NavBar title={getViewTitle()} />
-        <div className="p-6">
-          {currentView === "module" && (
-            <ModuleView
-              moduleId={currentModule}
-              selectedTable={selectedTable}
-              onSelectTable={setSelectedTable}
-            />
-          )}
-          {currentView === "er-diagram" && <ERDiagram />}
-          {currentView === "sql-generator" && <SqlGenerator />}
-          {currentView === "conventions" && <Conventions />}
+    <div className="flex h-screen flex-col overflow-hidden">
+      <TestBenchNav />
+      <div className="flex flex-1">
+        <Sidebar
+          currentModule={currentModule}
+          onModuleChange={handleModuleChange}
+          onViewChange={handleViewChange}
+          currentView={currentView}
+        />
+        <div className="flex-1 overflow-x-hidden overflow-y-auto ml-64">
+          <NavBar title={getViewTitle()} />
+          <div className="p-6">
+            {currentView === "module" && (
+              <ModuleView
+                moduleId={currentModule}
+                selectedTable={selectedTable}
+                onSelectTable={setSelectedTable}
+              />
+            )}
+            {currentView === "er-diagram" && <ERDiagram />}
+            {currentView === "sql-generator" && <SqlGenerator />}
+            {currentView === "conventions" && <Conventions />}
+          </div>
         </div>
       </div>
     </div>

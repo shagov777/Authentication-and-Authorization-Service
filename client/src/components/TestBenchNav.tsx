@@ -2,9 +2,33 @@ import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 export default function TestBenchNav() {
   const { user, isLoading } = useAuth();
+  const { toast } = useToast();
+
+  const handleLogout = async () => {
+    try {
+      const res = await apiRequest("POST", "/api/logout", {});
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+        toast({
+          title: "Logout successful",
+          description: "You have been logged out.",
+        });
+      } else {
+        throw new Error("Logout failed");
+      }
+    } catch (error) {
+      toast({
+        title: "Logout failed",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <Card className="mb-4">
@@ -22,8 +46,8 @@ export default function TestBenchNav() {
               <Button variant="outline">Auth Test Bench</Button>
             </Link>
             {user ? (
-              <Button variant="default" onClick={() => {}}>
-                Logged in as {user.username}
+              <Button variant="default" onClick={handleLogout}>
+                Logout ({user.username})
               </Button>
             ) : (
               <Link href="/auth">
