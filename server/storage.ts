@@ -3,7 +3,8 @@ import { DbModule, DbSchema, DbTable, generateSQL } from "@/lib/utils";
 import { 
   User, InsertUser, Role, InsertRole, 
   AuthUser, InsertAuthUser, AuthSession, InsertAuthSession,
-  Auth2FA, InsertAuth2FA, AuthPasswordReset, InsertAuthPasswordReset
+  Auth2FA, InsertAuth2FA, AuthPasswordReset, InsertAuthPasswordReset,
+  UpsertAuthUser
 } from "@shared/schema";
 
 // Define storage interface

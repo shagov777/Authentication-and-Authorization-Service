@@ -7,6 +7,7 @@ import type { Express, RequestHandler } from "express";
 import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
+import { UpsertAuthUser } from '@shared/schema';
 
 if (!process.env.REPLIT_DOMAINS) {
   throw new Error("Environment variable REPLIT_DOMAINS not provided");
@@ -59,13 +60,12 @@ async function upsertUser(
   claims: any,
 ) {
   await storage.upsertUser({
-    id: claims["sub"],
-    username: claims["username"],
-    email: claims["email"],
-    firstName: claims["first_name"],
-    lastName: claims["last_name"],
-    bio: claims["bio"],
-    profileImageUrl: claims["profile_image_url"],
+    username: claims["username"] || `user_${claims["sub"]}`,
+    email: claims["email"] || "",
+    password: "", // We don't need a password for OAuth users
+    role: "user",
+    mobile_number: "",
+    isActive: true
   });
 }
 
