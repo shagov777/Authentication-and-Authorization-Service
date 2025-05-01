@@ -1,0 +1,101 @@
+3. Database Schema
+
+The database schema for this service follows the principles set out in the Core Database Table Structure document, incorporating all relevant fields and relationships.
+
+3.1 User Authentication Tables:
+	•	auth_users: Stores user login details, email, password hash, and roles.
+	•	auth_sessions: Tracks active user sessions, including JWT tokens, IP addresses, and device information.
+	•	auth_2fa: Stores TOTP secrets and two-factor authentication status.
+	•	auth_password_resets: Stores tokens for password reset functionality.
+
+Indexes and Optimizations:
+	•	Index on email, mobile_number: For quick lookups.
+	•	Index on session_id, user_id in auth_sessions: For efficient session management.
+	•	Deleted_at column in auth_users: For soft deletes.
+
+3.2 Role Management:
+	•	roles (Optional Table for future scalability): Stores role definitions and permissions associated with each role (e.g., admin, support, user).
+
+⸻
+
+4. Security Requirements
+
+4.1 Password Hashing:
+	•	Passwords will be securely hashed using Argon2id or bcrypt with a high work factor to protect against brute-force attacks.
+
+4.2 Encryption:
+	•	Sensitive data (e.g., JWT tokens) will be encrypted at rest and in transit.
+	•	AES-256 encryption will be used for data at rest, and TLS 1.3 will be used for data in transit.
+
+4.3 Authentication Tokens:
+	•	JWT tokens will be signed using the RS256 algorithm.
+	•	Tokens will include expiration times and be refreshed periodically.
+	•	Private keys for signing JWTs will be stored in a Hardware Security Module (HSM).
+
+4.4 Role-Based Access Control (RBAC):
+	•	Define roles and permissions for different user groups.
+	•	Secure and granular access control based on user roles (admin, user, support).
+
+5. API Endpoint Details
+
+5.1 POST /auth/register
+	•	Description: Registers a new user.
+	•	Request Body:
+
+{
+  "email": "user@example.com",
+  "mobile_number": "+15551234567",
+  "password": "StrongPassword123!",
+  "role": "user"
+}
+
+
+	•	Response Codes:
+	•	201 Created: User successfully registered.
+	•	400 Bad Request: Invalid input (e.g., weak password).
+	•	409 Conflict: Email or mobile number already exists.
+
+⸻
+
+5.2 POST /auth/login
+	•	Description: Authenticates a user and provides JWT tokens.
+	•	Request Body:
+
+{
+  "email": "user@example.com",
+  "password": "CorrectPassword"
+}
+
+
+	•	Response Codes:
+	•	200 OK: Login successful, JWT and refresh token provided.
+	•	401 Unauthorized: Invalid credentials.
+	•	429 Too Many Requests: Account temporarily locked.
+
+5.3 POST /auth/2fa/setup
+	•	Description: Set up two-factor authentication for a user.
+	•	Response Codes:
+	•	200 OK: 2FA set up successfully.
+	•	400 Bad Request: Invalid setup parameters.
+
+⸻
+
+6. Performance and Scalability Considerations
+	•	Load Balancing: The Authentication service will be deployed behind a load balancer (NGINX) to distribute traffic and improve scalability.
+	•	Horizontal Scaling: The service will scale horizontally to handle high traffic, using Kubernetes to manage containers and ensure high availability.
+	•	Database Optimization: Utilize read replicas in PostgreSQL for high read performance and connection pooling to handle high concurrency.
+
+7. Testing Requirements
+	•	Unit Testing: All authentication-related logic and password hashing functions will be unit-tested. Code coverage target: 85%.
+	•	Integration Testing: Test interactions between the Authentication & Authorization service and the KYC and Wallet & Transactions services.
+	•	Security Testing: Penetration testing will be conducted to identify vulnerabilities in authentication, including SQL injection, XSS, and JWT token theft.
+
+⸻
+
+8. Error Handling
+	•	Standardized Error Responses:
+	•	400 Bad Request: Invalid input.
+	•	401 Unauthorized: Invalid or expired JWT.
+	•	500 Internal Server Error: Unexpected server issues.
+
+⸻

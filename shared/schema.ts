@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, json, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, json, varchar, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -57,23 +57,66 @@ export const roles = pgTable("roles", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const users = pgTable("users", {
+export const auth_users = pgTable("auth_users", {
   id: serial("id").primaryKey(),
-  username: varchar("username").unique().notNull(),
-  email: varchar("email").unique(),
-  password: varchar("password").notNull(),
-  firstName: varchar("first_name"),
-  lastName: varchar("last_name"),
-  bio: text("bio"),
-  profileImageUrl: varchar("profile_image_url"),
+  username: varchar("username", { length: 50 }).unique().notNull(),
+  email: varchar("email", { length: 255 }).unique().notNull(),
+  mobile_number: varchar("mobile_number", { length: 20 }).unique(),
+  password: varchar("password", { length: 255 }).notNull(),
+  role: varchar("role", { length: 50 }).notNull().default("user"),
   roleId: integer("role_id").references(() => roles.id),
   isActive: boolean("is_active").default(true),
   lastLogin: timestamp("last_login"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  deletedAt: timestamp("deleted_at"),
+}, (table) => {
+  return {
+    emailIdx: index("idx_auth_users_email").on(table.email),
+    mobileIdx: index("idx_auth_users_mobile").on(table.mobile_number),
+  }
 });
 
-// Session storage table required for Replit Auth
+// Session storage table
+export const auth_sessions = pgTable("auth_sessions", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull().references(() => auth_users.id),
+  session_id: varchar("session_id", { length: 255 }).unique().notNull(),
+  jwt_token: varchar("jwt_token", { length: 2000 }),
+  refresh_token: varchar("refresh_token", { length: 255 }),
+  ip_address: varchar("ip_address", { length: 50 }),
+  device_info: text("device_info"),
+  expires_at: timestamp("expires_at").notNull(),
+  created_at: timestamp("created_at").defaultNow(),
+}, (table) => {
+  return {
+    sessionIdx: index("idx_auth_sessions_session_id").on(table.session_id),
+    userIdx: index("idx_auth_sessions_user_id").on(table.user_id),
+  }
+});
+
+// 2FA storage
+export const auth_2fa = pgTable("auth_2fa", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").references(() => auth_users.id).notNull(),
+  totp_secret: varchar("totp_secret", { length: 255 }),
+  phone_number: varchar("phone_number", { length: 20 }),
+  is_enabled: boolean("is_enabled").default(false),
+  created_at: timestamp("created_at").defaultNow(),
+  updated_at: timestamp("updated_at").defaultNow(),
+});
+
+// Password reset tokens
+export const auth_password_resets = pgTable("auth_password_resets", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").references(() => auth_users.id).notNull(),
+  token: varchar("token", { length: 255 }).notNull(),
+  expires_at: timestamp("expires_at").notNull(),
+  created_at: timestamp("created_at").defaultNow(),
+  used_at: timestamp("used_at"),
+});
+
+// Original sessions table - keeping for compatibility
 export const sessions = pgTable(
   "sessions",
   {
@@ -92,7 +135,27 @@ export const insertRelationshipSchema = createInsertSchema(relationshipSchema).o
 
 // Role and User Insert schemas
 export const insertRoleSchema = createInsertSchema(roles).omit({ id: true, createdAt: true });
-export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, updatedAt: true, lastLogin: true });
+export const insertAuthUserSchema = createInsertSchema(auth_users).omit({ 
+  id: true, 
+  createdAt: true, 
+  updatedAt: true, 
+  lastLogin: true,
+  deletedAt: true
+});
+export const insertAuthSessionSchema = createInsertSchema(auth_sessions).omit({ 
+  id: true, 
+  created_at: true 
+});
+export const insertAuth2faSchema = createInsertSchema(auth_2fa).omit({ 
+  id: true, 
+  created_at: true, 
+  updated_at: true 
+});
+export const insertAuthPasswordResetSchema = createInsertSchema(auth_password_resets).omit({ 
+  id: true, 
+  created_at: true, 
+  used_at: true 
+});
 export const insertSessionSchema = createInsertSchema(sessions).omit({ id: true, createdAt: true });
 
 // Types
@@ -115,24 +178,29 @@ export type InsertRelationship = z.infer<typeof insertRelationshipSchema>;
 export type Role = typeof roles.$inferSelect;
 export type InsertRole = z.infer<typeof insertRoleSchema>;
 
-// User Types
-export type User = typeof users.$inferSelect;
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type UpsertUser = {
+// Auth User Types
+export type AuthUser = typeof auth_users.$inferSelect;
+export type InsertAuthUser = z.infer<typeof insertAuthUserSchema>;
+export type AuthSession = typeof auth_sessions.$inferSelect;
+export type InsertAuthSession = z.infer<typeof insertAuthSessionSchema>;
+export type Auth2FA = typeof auth_2fa.$inferSelect;
+export type InsertAuth2FA = z.infer<typeof insertAuth2faSchema>;
+export type AuthPasswordReset = typeof auth_password_resets.$inferSelect;
+export type InsertAuthPasswordReset = z.infer<typeof insertAuthPasswordResetSchema>;
+
+export type UpsertAuthUser = {
   username: string;
-  email?: string;
-  password?: string;
-  firstName?: string;
-  lastName?: string;
-  bio?: string;
-  profileImageUrl?: string;
+  email: string;
+  mobile_number?: string;
+  password: string;
+  role?: string;
   roleId?: number;
   isActive?: boolean;
 };
 
-export type CreateUser = Omit<UpsertUser, 'password'> & {
-  password: string;
-};
+// For backward compatibility
+export type User = AuthUser;
+export type InsertUser = InsertAuthUser;
 
 export type Session = typeof sessions.$inferSelect;
 export type InsertSession = z.infer<typeof insertSessionSchema>;
