@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import DatabaseVisualizer from "@/pages/DatabaseVisualizer";
+import AuthPage from "@/pages/auth-page";
 import { ThemeProvider } from "@/components/ui/theme-provider";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 
@@ -12,6 +13,7 @@ function Router() {
   return (
     <Switch>
       <ProtectedRoute path="/" component={DatabaseVisualizer} />
+      <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
     </Switch>
   );

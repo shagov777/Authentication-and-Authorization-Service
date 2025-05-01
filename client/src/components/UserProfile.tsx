@@ -1,66 +1,44 @@
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuLabel, 
+  DropdownMenuSeparator, 
+  DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, User } from "lucide-react";
+import { User, LogOut } from "lucide-react";
 
 export function UserProfile() {
-  const { user, isAuthenticated } = useAuth();
-
-  if (!isAuthenticated) {
-    return (
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => window.location.href = "/api/login"}
-        className="ml-auto"
-      >
-        Log in
-      </Button>
-    );
+  const { user, logout, isAuthenticated } = useAuth();
+  
+  if (!isAuthenticated || !user) {
+    return null;
   }
-
-  const getInitials = () => {
-    if (!user) return "U";
-    return user.username ? user.username.charAt(0).toUpperCase() : "U";
-  };
-
+  
+  // Get initials for avatar fallback
+  const initials = user.username.substring(0, 2).toUpperCase();
+  
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          className="relative h-8 w-8 rounded-full ml-auto"
-        >
-          <Avatar className="h-8 w-8">
-            {user?.profileImageUrl ? (
-              <AvatarImage
-                src={user.profileImageUrl}
-                alt={user.username || "User"}
-              />
-            ) : null}
-            <AvatarFallback>{getInitials()}</AvatarFallback>
+        <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+          <Avatar className="h-10 w-10">
+            <AvatarImage alt={user.username} />
+            <AvatarFallback>{initials}</AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56" align="end" forceMount>
-        <DropdownMenuItem className="flex flex-col items-start">
-          <div className="text-sm font-medium">{user?.username}</div>
-          {user?.email ? (
-            <div className="text-xs text-muted-foreground">{user.email}</div>
-          ) : null}
+      <DropdownMenuContent className="w-56" align="end">
+        <DropdownMenuLabel>My Account</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem disabled className="flex flex-col items-start">
+          <span className="font-medium">{user.username}</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onClick={() => window.location.href = "/api/logout"}
-          className="text-red-600"
-        >
+        <DropdownMenuItem onClick={() => logout()}>
           <LogOut className="mr-2 h-4 w-4" />
           <span>Log out</span>
         </DropdownMenuItem>

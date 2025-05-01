@@ -1,9 +1,6 @@
 import { databaseSchema } from "../shared/database-schema";
 import { DbModule, DbSchema, DbTable, generateSQL } from "@/lib/utils";
-import { User, UpsertUser } from "@shared/schema";
-import { db } from "./db";
-import { eq } from "drizzle-orm";
-import { users } from "@shared/schema";
+import { User, InsertUser } from "@shared/schema";
 
 // Define storage interface
 export interface IStorage {
@@ -136,26 +133,34 @@ export class MemStorage implements IStorage {
     return sql;
   }
 
-  // User operations for Replit Auth
-  async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user;
+  // User operations for standard authentication
+  private users: User[] = [];
+  private nextUserId = 1;
+
+  async getUser(id: number): Promise<User | undefined> {
+    return this.users.find(user => user.id === id);
   }
 
-  async upsertUser(userData: UpsertUser): Promise<User> {
-    const [user] = await db
-      .insert(users)
-      .values(userData)
-      .onConflictDoUpdate({
-        target: users.id,
-        set: {
-          ...userData,
-          updatedAt: new Date()
-        }
-      })
-      .returning();
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    return this.users.find(user => user.username === username);
+  }
+
+  async createUser(userData: InsertUser): Promise<User> {
+    const newUser: User = {
+      id: this.nextUserId++,
+      username: userData.username,
+      email: userData.email || null,
+      password: userData.password,
+      firstName: userData.firstName || null,
+      lastName: userData.lastName || null,
+      bio: userData.bio || null,
+      profileImageUrl: userData.profileImageUrl || null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
     
-    return user;
+    this.users.push(newUser);
+    return newUser;
   }
 }
 
