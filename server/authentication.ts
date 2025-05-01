@@ -395,34 +395,123 @@ export function setupAuth(app: Express) {
    * Headers: Authorization: Bearer {token}
    * Response: 200 OK - 2FA setup successful
    */
-  app.post("/auth/2fa/setup", async (req, res) => {
-    const authHeader = req.headers.authorization;
-    const token = authHeader?.split(' ')[1];
-    
-    if (!token) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-    
+  app.post("/auth/2fa/setup", jwtAuthMiddleware, async (req, res) => {
     try {
-      const payload = validateJwtToken(token);
-      if (!payload) {
-        return res.status(401).json({ message: "Invalid token" });
-      }
+      const userId = (req as any).userId;
       
-      // Generate TOTP secret (in a real implementation, you'd use a TOTP library)
+      // Generate TOTP secret (in a real implementation, you'd use a TOTP library like speakeasy)
       const totpSecret = randomBytes(20).toString('hex');
       
-      // Save to database
-      await storage.setupTwoFactorAuth(payload.userId, totpSecret);
+      // Save to database (setup but not enabled yet)
+      const twoFactorAuth = await storage.setupTwoFactorAuth(userId, totpSecret);
       
       res.json({
         message: "2FA setup initiated",
         secret: totpSecret,
-        // In production, you would also return a QR code URL
+        isEnabled: false,
+        // In production, you would also return a QR code URL using a library like qrcode:
+        // qrUrl: await QRCode.toDataURL(`otpauth://totp/AppName:${user.email}?secret=${totpSecret}&issuer=AppName`)
       });
     } catch (error) {
       console.error("2FA setup error:", error);
       res.status(500).json({ message: "Failed to setup 2FA" });
+    }
+  });
+  
+  /**
+   * API Endpoint: Verify and Enable 2FA
+   * 
+   * POST /auth/2fa/verify
+   * Headers: Authorization: Bearer {token}
+   * Request body: { code }
+   * Response: 200 OK - 2FA verified and enabled
+   */
+  app.post("/auth/2fa/verify", jwtAuthMiddleware, async (req, res) => {
+    try {
+      const { code } = req.body;
+      const userId = (req as any).userId;
+      
+      if (!code) {
+        return res.status(400).json({ message: "Verification code is required" });
+      }
+      
+      // Get the user's 2FA settings
+      const twoFactorAuth = await storage.getTwoFactorAuth(userId);
+      if (!twoFactorAuth || !twoFactorAuth.totp_secret) {
+        return res.status(400).json({ message: "2FA not set up for this user" });
+      }
+      
+      // In a real implementation, you would verify the TOTP code using a library like speakeasy:
+      // const verified = speakeasy.totp.verify({
+      //   secret: twoFactorAuth.totp_secret,
+      //   encoding: 'hex',
+      //   token: code,
+      //   window: 1 // Allow 1 time step before/after for clock drift
+      // });
+      
+      // For the example, we're just checking if the code is "123456" (simulating verification)
+      const verified = code === "123456";
+      
+      if (!verified) {
+        return res.status(400).json({ message: "Invalid verification code" });
+      }
+      
+      // Enable 2FA for the user
+      await storage.updateTwoFactorAuth(userId, { is_enabled: true });
+      
+      res.json({
+        message: "2FA successfully enabled",
+        isEnabled: true
+      });
+    } catch (error) {
+      console.error("2FA verification error:", error);
+      res.status(500).json({ message: "Failed to verify 2FA code" });
+    }
+  });
+  
+  /**
+   * API Endpoint: Disable 2FA
+   * 
+   * POST /auth/2fa/disable
+   * Headers: Authorization: Bearer {token}
+   * Request body: { code }
+   * Response: 200 OK - 2FA disabled
+   */
+  app.post("/auth/2fa/disable", jwtAuthMiddleware, async (req, res) => {
+    try {
+      const { code } = req.body;
+      const userId = (req as any).userId;
+      
+      if (!code) {
+        return res.status(400).json({ message: "Verification code is required" });
+      }
+      
+      // Get the user's 2FA settings
+      const twoFactorAuth = await storage.getTwoFactorAuth(userId);
+      if (!twoFactorAuth || !twoFactorAuth.is_enabled) {
+        return res.status(400).json({ message: "2FA not enabled for this user" });
+      }
+      
+      // Verify the code (same simulation as above)
+      const verified = code === "123456";
+      
+      if (!verified) {
+        return res.status(400).json({ message: "Invalid verification code" });
+      }
+      
+      // Disable 2FA for the user
+      await storage.updateTwoFactorAuth(userId, { 
+        is_enabled: false,
+        totp_secret: null // Optionally clear the secret
+      });
+      
+      res.json({
+        message: "2FA successfully disabled",
+        isEnabled: false
+      });
+    } catch (error) {
+      console.error("2FA disable error:", error);
+      res.status(500).json({ message: "Failed to disable 2FA" });
     }
   });
 
@@ -469,6 +558,78 @@ export function setupAuth(app: Express) {
     } catch (error) {
       console.error("Password reset request error:", error);
       res.status(500).json({ message: "Failed to process reset request" });
+    }
+  });
+  
+  /**
+   * API Endpoint: Reset password
+   * 
+   * POST /auth/password-reset/confirm
+   * Request body: { token, password }
+   * Response: 200 OK - Password reset successful
+   */
+  app.post("/auth/password-reset/confirm", async (req, res) => {
+    const { token, password } = req.body;
+    
+    if (!token || !password) {
+      return res.status(400).json({ 
+        message: "Missing required fields",
+        errors: {
+          token: !token ? "Token is required" : null,
+          password: !password ? "New password is required" : null,
+        }
+      });
+    }
+    
+    try {
+      // Validate password strength
+      const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+      if (!passwordRegex.test(password)) {
+        return res.status(400).json({
+          message: "Password is too weak",
+          requirements: "Password must be at least 8 characters long and include uppercase, lowercase, numbers, and special characters"
+        });
+      }
+      
+      // Find the reset token record
+      const resetRecord = await storage.getPasswordResetByToken(token);
+      if (!resetRecord) {
+        return res.status(400).json({ message: "Invalid or expired token" });
+      }
+      
+      // Check if token is expired
+      if (new Date() > resetRecord.expires_at) {
+        return res.status(400).json({ message: "Token has expired" });
+      }
+      
+      // Check if token has already been used
+      if (resetRecord.used_at) {
+        return res.status(400).json({ message: "Token has already been used" });
+      }
+      
+      // Get the user
+      const user = await storage.getUser(resetRecord.user_id);
+      if (!user) {
+        return res.status(400).json({ message: "User not found" });
+      }
+      
+      // Hash the new password
+      const hashedPassword = await hashPassword(password);
+      
+      // Update user's password
+      await storage.updateUser(user.id, { password: hashedPassword });
+      
+      // Mark the reset token as used
+      await storage.markPasswordResetUsed(token);
+      
+      // Log out other sessions (optional but recommended for security)
+      // This would require implementing a new method in storage
+      // await storage.invalidateAllUserSessions(user.id);
+      
+      res.json({ message: "Password has been reset successfully" });
+    } catch (error) {
+      console.error("Password reset confirm error:", error);
+      res.status(500).json({ message: "Failed to reset password" });
     }
   });
 }

@@ -29,6 +29,7 @@ export interface IStorage {
   // Advanced authentication operations
   getUserByEmail(email: string): Promise<User | undefined>;
   updateUserLastLogin(userId: number): Promise<void>;
+  updateUser(userId: number, updates: Partial<User>): Promise<User>;
   upsertUser(userData: UpsertAuthUser): Promise<User>;
   
   // Session management
@@ -37,6 +38,7 @@ export interface IStorage {
   getSessionByToken(token: string): Promise<AuthSession | undefined>;
   updateSession(sessionId: number, updates: Partial<AuthSession>): Promise<AuthSession>;
   deleteSessionByToken(token: string): Promise<void>;
+  invalidateAllUserSessions(userId: number): Promise<void>;
   
   // Two-factor authentication
   setupTwoFactorAuth(userId: number, totpSecret: string): Promise<Auth2FA>;
@@ -250,6 +252,17 @@ export class MemStorage implements IStorage {
     }
   }
   
+  async updateUser(userId: number, updates: Partial<User>): Promise<User> {
+    const user = await this.getUser(userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    
+    // Apply updates
+    Object.assign(user, updates, { updatedAt: new Date() });
+    return user;
+  }
+  
   async upsertUser(userData: UpsertAuthUser): Promise<User> {
     // Check if user already exists
     let user = await this.getUserByUsername(userData.username);
@@ -320,6 +333,10 @@ export class MemStorage implements IStorage {
     if (index !== -1) {
       this.sessions.splice(index, 1);
     }
+  }
+  
+  async invalidateAllUserSessions(userId: number): Promise<void> {
+    this.sessions = this.sessions.filter(session => session.user_id !== userId);
   }
   
   // Two-factor authentication
