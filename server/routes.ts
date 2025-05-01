@@ -1,3 +1,13 @@
+/**
+ * API Routes Module
+ * 
+ * This module defines all the API endpoints for the database schema manager application.
+ * It includes routes for:
+ * - Authentication and user management
+ * - Database schema visualization and management
+ * - SQL generation
+ */
+
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
@@ -7,12 +17,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Set up standard authentication
   setupAuth(app);
   
-  // Authentication routes
+  /**
+   * User Management API
+   */
+  
+  /**
+   * Get current authenticated user
+   * GET /api/user
+   * Protected: Yes
+   * Response: User object (excluding password)
+   */
   app.get('/api/user', isAuthenticated, (req, res) => {
     if (!req.user) {
       return res.status(401).json({ message: "Unauthorized" });
     }
-    const user = req.user as any; // Type cast to any to access properties
+    const user = req.user as any;
     // Only send non-sensitive user information
     res.json({
       id: user.id,
@@ -23,7 +42,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
   
-  // API for user management (test bench)
+  /**
+   * Get all users (for test bench and admin use)
+   * GET /api/users
+   * Protected: Yes
+   * Response: Array of user objects (excluding passwords)
+   */
   app.get('/api/users', isAuthenticated, async (req, res) => {
     try {
       const users = await storage.getAllUsers();
@@ -39,6 +63,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  /**
+   * Get all available user roles
+   * GET /api/roles
+   * Protected: No
+   * Response: Array of role objects
+   */
   app.get('/api/roles', async (req, res) => {
     try {
       const roles = await storage.getAllRoles();
@@ -49,7 +79,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Schema routes
+  /**
+   * Schema Management API
+   */
+  
+  /**
+   * Get full database schema
+   * GET /api/schema
+   * Protected: No
+   * Response: Complete schema object with modules, tables, and relationships
+   */
   app.get('/api/schema', async (req, res) => {
     try {
       const schema = await storage.getSchema();
@@ -60,6 +99,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  /**
+   * Get all modules
+   * GET /api/modules
+   * Protected: No
+   * Response: Array of module objects
+   */
   app.get('/api/modules', async (req, res) => {
     try {
       const modules = await storage.getAllModules();
@@ -70,6 +115,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  /**
+   * Get specific module by ID
+   * GET /api/modules/:id
+   * Protected: No
+   * Response: Module object with its tables
+   */
   app.get('/api/modules/:id', async (req, res) => {
     try {
       const moduleId = req.params.id;
@@ -86,6 +137,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  /**
+   * Get specific table by name
+   * GET /api/tables/:name
+   * Protected: No
+   * Response: Table object with columns and indexes
+   */
   app.get('/api/tables/:name', async (req, res) => {
     try {
       const tableName = req.params.name;
@@ -102,6 +159,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  /**
+   * Search schema by query
+   * GET /api/search?q=query
+   * Protected: No
+   * Response: Object with matching tables and columns
+   */
   app.get('/api/search', async (req, res) => {
     try {
       const query = req.query.q as string;
@@ -118,6 +181,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  /**
+   * SQL Generation API
+   */
+  
+  /**
+   * Generate SQL for specific module
+   * GET /api/sql/module/:id
+   * Protected: No
+   * Response: Object with SQL string
+   */
   app.get('/api/sql/module/:id', async (req, res) => {
     try {
       const moduleId = req.params.id;
@@ -129,6 +202,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  /**
+   * Generate SQL for entire schema
+   * GET /api/sql/all
+   * Protected: No
+   * Response: Object with SQL string
+   */
   app.get('/api/sql/all', async (req, res) => {
     try {
       const sql = await storage.generateSqlForAllModules();
