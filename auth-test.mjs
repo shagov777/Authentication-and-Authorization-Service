@@ -80,6 +80,8 @@ async function testLogin() {
 
 async function testGetUser() {
   console.log('TESTING GET USER PROFILE');
+  console.log(`Using auth token: ${authToken.substring(0, 25)}...`);
+  console.log(`Authorization header: Bearer ${authToken.substring(0, 20)}...`);
   return apiRequest('/auth/user', 'GET', null, authToken);
 }
 

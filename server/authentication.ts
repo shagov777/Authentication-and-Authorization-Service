@@ -482,15 +482,20 @@ export function jwtAuthMiddleware(req: Request, res: Response, next: NextFunctio
   const token = authHeader?.split(' ')[1];
   
   if (!token) {
+    console.log('JWT Auth: No token provided');
     return res.status(401).json({ message: "No token provided" });
   }
   
+  console.log(`JWT Auth: Validating token: ${token.substring(0, 20)}...`);
+  
   const payload = validateJwtToken(token);
   if (!payload) {
+    console.log('JWT Auth: Invalid or expired token');
     return res.status(401).json({ message: "Invalid or expired token" });
   }
   
   // Set user data in request object
+  (req as any).userId = payload.userId;
   (req as any).user = {
     id: payload.userId,
     username: payload.username,
@@ -498,6 +503,7 @@ export function jwtAuthMiddleware(req: Request, res: Response, next: NextFunctio
     role: payload.role,
   };
   
+  console.log(`JWT Auth: Token valid for user: ${payload.username} (${payload.userId})`);
   next();
 }
 
