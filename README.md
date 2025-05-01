@@ -1,107 +1,104 @@
-# PostgreSQL Database Schema Manager
+# Authentication & Authorization Service
 
-A comprehensive database schema visualization and management platform designed to enhance PostgreSQL database design, documentation, and optimization.
+A secure and scalable authentication and authorization service built with Node.js, Express, and PostgreSQL.
 
-![PostgreSQL Schema Manager](./generated-icon.png)
+## Features
 
-## 🚀 Features
+- User registration and login
+- JWT-based authentication
+- Role-based access control (RBAC)
+- Session management
+- Account lockout after failed attempts
+- Two-factor authentication (2FA)
+- Password reset functionality
+- Audit logging
 
-- **Advanced Schema Visualization** with interactive ER diagrams using React Flow
-- **Module-Based Organization** for logical grouping of related tables
-- **SQL Generation** for entire schema or specific modules
-- **Role-Based Authentication** with secure login/registration
-- **TypeScript and React** for a robust frontend experience
-- **Express and Drizzle ORM** for efficient backend operations
+## Tech Stack
 
-## 📋 Quick Start
+- Node.js
+- Express.js
+- PostgreSQL
+- Drizzle ORM
+- TypeScript
+- JWT
+- bcrypt
+- Zod (validation)
 
-### Prerequisites
+## Prerequisites
 
-- Node.js (v16+)
-- PostgreSQL database (local or remote)
+- Node.js 20 or later
+- Docker and Docker Compose
+- PostgreSQL 15 or later
 
-### Installation
+## Getting Started
 
-1. Clone the repository
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/auth-service.git
+cd auth-service
+```
+
 2. Install dependencies:
-   ```
-   npm install
-   ```
+```bash
+npm install
+```
+
 3. Set up environment variables:
-   ```
-   DATABASE_URL=postgresql://username:password@localhost:5432/dbname
-   SESSION_SECRET=your-secure-session-secret
-   ```
-4. Run the development server:
-   ```
-   npm run dev
-   ```
+```bash
+cp .env.example .env
+# Edit .env with your configuration
+```
 
-## 🛠️ Architecture
+4. Start the development environment:
+```bash
+docker-compose up
+```
 
-This application follows a modern full-stack architecture:
+The service will be available at `http://localhost:3000`.
 
-- **Frontend**: React, TypeScript, TailwindCSS, shadcn/ui, React Flow, TanStack Query
-- **Backend**: Express.js, Drizzle ORM, PostgreSQL
-- **Authentication**: Passport.js with local strategy, secure password hashing (scrypt)
+## API Documentation
 
-## 📊 Database Schema
+See [API_DOCUMENTATION.md](API_DOCUMENTATION.md) for detailed API documentation.
 
-The application itself uses a database schema consisting of:
+## Development
 
-- User management (users, roles)
-- Schema metadata (tables, columns, modules, relationships)
-- User sessions
+### Running Tests
+```bash
+npm test
+```
 
-For more details, see [DATABASE_SCHEMA_STANDARDS.md](./DATABASE_SCHEMA_STANDARDS.md).
+### Building for Production
+```bash
+npm run build
+```
 
-## 📘 Documentation
+### Running in Production
+```bash
+npm start
+```
 
-- [API Documentation](./API_DOCUMENTATION.md) - REST API endpoints reference
-- [Technical Specification](./TECHNICAL_SPECIFICATION.md) - Authentication details
-- [Visualization Tool](./VISUALIZATION_TOOL_DOCUMENTATION.md) - UI components guide
-- [Database Standards](./DATABASE_SCHEMA_STANDARDS.md) - Schema design principles
+## Docker Deployment
 
-## 🔐 Authentication & Authorization
+The service is containerized and can be deployed using Docker:
 
-The system provides complete user management with:
+```bash
+# Build the image
+docker build -t auth-service .
 
-- Secure user registration and login
-- Password hashing with salt using scrypt algorithm
-- Session-based authentication
-- Role-based access control
-- Protected API endpoints
+# Run the container
+docker run -p 3000:3000 auth-service
+```
 
-## 🔍 Visualization Tools
+For production deployment, use the provided `docker-compose.prod.yml` file.
 
-- **ER Diagram View**: Comprehensive view of all tables and relationships
-- **Module View**: Focused view of tables within a specific functional module
-- **SQL Generator**: Automatic DDL generation from visual schema
+## Contributing
 
-## 🧪 Test Bench
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-The application includes a test bench for:
+## License
 
-- User registration and authentication testing
-- Database record inspection
-- Permission verification
-
-## 🛡️ Security Considerations
-
-- Passwords are never stored in plain text
-- Session data is securely managed
-- Input validation on all forms
-- API route protection with middleware
-- Proper error handling and logging
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 📞 Support
-
-For questions or issues, please open an issue on this repository.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
