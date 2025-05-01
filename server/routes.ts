@@ -9,7 +9,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Authentication routes
   app.get('/api/user', isAuthenticated, (req, res) => {
-    const user = req.user;
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    const user = req.user as any; // Type cast to any to access properties
     // Only send non-sensitive user information
     res.json({
       id: user.id,

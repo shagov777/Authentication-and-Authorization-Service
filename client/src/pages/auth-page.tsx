@@ -11,7 +11,7 @@ import { Loader2 } from "lucide-react";
 export default function AuthPage() {
   const { user, isLoading, login, register, loginStatus, registerStatus } = useAuth();
   const [loginData, setLoginData] = useState({ username: "", password: "" });
-  const [registerData, setRegisterData] = useState({ username: "", email: "", password: "" });
+  const [registerData, setRegisterData] = useState({ username: "", email: "", password: "", roleId: 2 });
   
   // Redirect if already logged in
   if (user) {

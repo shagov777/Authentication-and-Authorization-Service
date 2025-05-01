@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
+import TestBenchNav from "@/components/TestBenchNav";
 import {
   Card,
   CardContent,
@@ -211,6 +212,7 @@ export default function TestBench() {
 
   return (
     <div className="container max-w-6xl mx-auto p-4">
+      <TestBenchNav />
       <h1 className="text-2xl font-bold mb-6">Authentication Test Bench</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

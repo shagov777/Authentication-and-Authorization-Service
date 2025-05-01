@@ -5,6 +5,7 @@ import ERDiagram from "@/pages/ERDiagram";
 import SqlGenerator from "@/pages/SqlGenerator";
 import Conventions from "@/pages/Conventions";
 import { NavBar } from "@/components/NavBar";
+import TestBenchNav from "@/components/TestBenchNav";
 
 type View = "module" | "er-diagram" | "sql-generator" | "conventions";
 
