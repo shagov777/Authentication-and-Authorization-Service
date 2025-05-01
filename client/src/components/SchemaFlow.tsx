@@ -127,12 +127,11 @@ export default function SchemaFlow({
     if (customRelationships && customRelationships.length > 0) {
       customRelationships.forEach(rel => {
         if (tables.some(t => t.name === rel.source) && tables.some(t => t.name === rel.target)) {
-          edges.push({
-            id: `${rel.source}-${rel.target}-${rel.type}`,
+          // Create edge without sourceHandle/targetHandle to avoid React Flow errors
+          const edge: Edge = {
+            id: `${rel.source}-${rel.sourceHandle || 'id'}-${rel.target}`,
             source: rel.source,
             target: rel.target,
-            sourceHandle: rel.sourceHandle,
-            targetHandle: rel.targetHandle,
             markerEnd: {
               type: MarkerType.ArrowClosed,
               width: 15,
@@ -142,7 +141,18 @@ export default function SchemaFlow({
             labelBgStyle: { fill: 'white' },
             labelStyle: { fontSize: 10 },
             className: `flow-edge-${rel.type === 'one-to-one' ? 'oneToOne' : rel.type === 'one-to-many' ? 'many' : 'primary'}`
-          });
+          };
+          
+          // Only add sourceHandle/targetHandle if they're defined
+          if (rel.sourceHandle) {
+            edge.sourceHandle = rel.sourceHandle;
+          }
+          
+          if (rel.targetHandle) {
+            edge.targetHandle = rel.targetHandle;
+          }
+          
+          edges.push(edge);
         }
       });
     }
