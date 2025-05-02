@@ -283,8 +283,24 @@ export class AuthService {
 
   // Logout
   async logout(sessionId: UUID): Promise<void> {
-    await db.delete(auth_sessions)
-      .where(eq(auth_sessions.id, sessionId));
+    try {
+      // Delete the session
+      await db.delete(auth_sessions)
+        .where(eq(auth_sessions.id, sessionId));
+
+      // Also delete any other active sessions for this user
+      const session = await db.query.auth_sessions.findFirst({
+        where: eq(auth_sessions.id, sessionId),
+      });
+
+      if (session && isUUID(session.user_id)) {
+        await db.delete(auth_sessions)
+          .where(eq(auth_sessions.user_id, session.user_id));
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+      throw new AuthError('Failed to logout', AuthErrorCode.INVALID_TOKEN);
+    }
   }
 
   // Get user by ID

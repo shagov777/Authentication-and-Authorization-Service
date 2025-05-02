@@ -126,4 +126,62 @@ export const AuthErrorCode = {
   PASSWORD_RESET_EXPIRED: 'PASSWORD_RESET_EXPIRED',
 } as const;
 
-export type AuthErrorCode = typeof AuthErrorCode[keyof typeof AuthErrorCode]; 
+export type AuthErrorCode = typeof AuthErrorCode[keyof typeof AuthErrorCode];
+
+// Request/Response Types
+export interface LoginRequest {
+  email: string;
+  password: string;
+  deviceInfo?: DeviceInfo;
+}
+
+export interface RegisterRequest {
+  email: string;
+  password: string;
+  mobileNumber?: string;
+  role?: string;
+}
+
+export interface AuthResponse {
+  user: Omit<User, 'password_hash'>;
+  tokens: {
+    accessToken: string;
+    refreshToken: string;
+  };
+}
+
+// Utility Types
+export interface DeviceInfo {
+  type?: string;
+  os?: string;
+  browser?: string;
+  version?: string;
+}
+
+export interface JWTPayload {
+  sub: string;
+  email: string;
+  role: string;
+  sessionId: string;
+  iat?: number;
+  exp?: number;
+}
+
+// IP Address Types
+export type ClientIP = string | null;
+
+export interface IPSource {
+  direct: string | undefined;
+  forwarded: string[] | undefined;
+  proxy: string | undefined;
+}
+
+// Session Management Types
+export interface SessionInfo {
+  id: string;
+  userId: string;
+  deviceInfo?: DeviceInfo;
+  ipAddress?: string;
+  userAgent?: string;
+  expiresAt: Date;
+} 

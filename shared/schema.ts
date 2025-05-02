@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, json, varchar, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, json, varchar, index, uuid, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -51,25 +51,25 @@ export const relationshipSchema = pgTable("db_relationships", {
 
 // User Authentication Tables
 export const roles = pgTable("roles", {
-  id: serial("id").primaryKey(),
+  id: uuid("id").primaryKey().defaultRandom(),
   name: varchar("name").unique().notNull(),
   description: text("description"),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const auth_users = pgTable("auth_users", {
-  id: serial("id").primaryKey(),
+  id: uuid("id").primaryKey().defaultRandom(),
   username: varchar("username", { length: 50 }).unique().notNull(),
   email: varchar("email", { length: 255 }).unique().notNull(),
   mobile_number: varchar("mobile_number", { length: 20 }).unique(),
   password: varchar("password", { length: 255 }).notNull(),
   role: varchar("role", { length: 50 }).notNull().default("user"),
-  roleId: integer("role_id").references(() => roles.id),
+  roleId: uuid("role_id").references(() => roles.id),
   isActive: boolean("is_active").default(true),
-  lastLogin: timestamp("last_login"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-  deletedAt: timestamp("deleted_at"),
+  lastLogin: timestamp("last_login", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
 }, (table) => {
   return {
     emailIdx: index("idx_auth_users_email").on(table.email),
@@ -79,49 +79,47 @@ export const auth_users = pgTable("auth_users", {
 
 // Session storage table
 export const auth_sessions = pgTable("auth_sessions", {
-  id: serial("id").primaryKey(),
-  user_id: integer("user_id").notNull().references(() => auth_users.id),
-  session_id: varchar("session_id", { length: 255 }).unique().notNull(),
-  jwt_token: varchar("jwt_token", { length: 2000 }),
-  refresh_token: varchar("refresh_token", { length: 255 }),
-  ip_address: varchar("ip_address", { length: 50 }),
-  device_info: text("device_info"),
-  expires_at: timestamp("expires_at").notNull(),
-  created_at: timestamp("created_at").defaultNow(),
+  id: uuid("id").primaryKey().defaultRandom(),
+  user_id: uuid("user_id").notNull().references(() => auth_users.id),
+  token_hash: varchar("token_hash", { length: 255 }).notNull(),
+  device_info: jsonb("device_info"),
+  ip_address: varchar("ip_address", { length: 45 }).notNull(),
+  expires_at: timestamp("expires_at", { withTimezone: true }).notNull(),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => {
   return {
-    sessionIdx: index("idx_auth_sessions_session_id").on(table.session_id),
+    sessionIdx: index("idx_auth_sessions_expires_at").on(table.expires_at),
     userIdx: index("idx_auth_sessions_user_id").on(table.user_id),
   }
 });
 
 // 2FA storage
 export const auth_2fa = pgTable("auth_2fa", {
-  id: serial("id").primaryKey(),
-  user_id: integer("user_id").references(() => auth_users.id).notNull(),
+  id: uuid("id").primaryKey().defaultRandom(),
+  user_id: uuid("user_id").references(() => auth_users.id).notNull(),
   totp_secret: varchar("totp_secret", { length: 255 }),
   phone_number: varchar("phone_number", { length: 20 }),
   is_enabled: boolean("is_enabled").default(false),
-  created_at: timestamp("created_at").defaultNow(),
-  updated_at: timestamp("updated_at").defaultNow(),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // Password reset tokens
 export const auth_password_resets = pgTable("auth_password_resets", {
-  id: serial("id").primaryKey(),
-  user_id: integer("user_id").references(() => auth_users.id).notNull(),
+  id: uuid("id").primaryKey().defaultRandom(),
+  user_id: uuid("user_id").references(() => auth_users.id).notNull(),
   token: varchar("token", { length: 255 }).notNull(),
-  expires_at: timestamp("expires_at").notNull(),
-  created_at: timestamp("created_at").defaultNow(),
-  used_at: timestamp("used_at"),
+  expires_at: timestamp("expires_at", { withTimezone: true }).notNull(),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  used_at: timestamp("used_at", { withTimezone: true }),
 });
 
 // Audit log for security events
 export const auth_audit_logs = pgTable("auth_audit_logs", {
-  id: serial("id").primaryKey(),
-  user_id: integer("user_id").references(() => auth_users.id),
+  id: uuid("id").primaryKey().defaultRandom(),
+  user_id: uuid("user_id").references(() => auth_users.id),
   event_type: varchar("event_type", { length: 50 }).notNull(),
-  event_timestamp: timestamp("event_timestamp").defaultNow().notNull(),
+  event_timestamp: timestamp("event_timestamp", { withTimezone: true }).notNull().defaultNow(),
   ip_address: varchar("ip_address", { length: 50 }),
   user_agent: text("user_agent"),
   event_details: json("event_details"),
@@ -220,7 +218,7 @@ export type UpsertAuthUser = {
   mobile_number?: string;
   password: string;
   role?: string;
-  roleId?: number;
+  roleId?: string;
   isActive?: boolean;
 };
 

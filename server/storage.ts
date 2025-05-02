@@ -19,7 +19,7 @@ export interface IStorage {
   generateSqlForAllModules(): Promise<string>;
   
   // User operations (for compatibility)
-  getUser(id: number): Promise<User | undefined>;
+  getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(userData: InsertUser): Promise<User>;
   getAllUsers(): Promise<User[]>;
@@ -28,22 +28,22 @@ export interface IStorage {
   
   // Advanced authentication operations
   getUserByEmail(email: string): Promise<User | undefined>;
-  updateUserLastLogin(userId: number): Promise<void>;
-  updateUser(userId: number, updates: Partial<User>): Promise<User>;
+  updateUserLastLogin(userId: string): Promise<void>;
+  updateUser(userId: string, updates: Partial<User>): Promise<User>;
   upsertUser(userData: UpsertAuthUser): Promise<User>;
   
   // Session management
   createSession(sessionData: InsertAuthSession): Promise<AuthSession>;
   getSessionByRefreshToken(refreshToken: string): Promise<AuthSession | undefined>;
   getSessionByToken(token: string): Promise<AuthSession | undefined>;
-  updateSession(sessionId: number, updates: Partial<AuthSession>): Promise<AuthSession>;
+  updateSession(sessionId: string, updates: Partial<AuthSession>): Promise<AuthSession>;
   deleteSessionByToken(token: string): Promise<void>;
-  invalidateAllUserSessions(userId: number): Promise<void>;
+  invalidateAllUserSessions(userId: string): Promise<void>;
   
   // Two-factor authentication
-  setupTwoFactorAuth(userId: number, totpSecret: string): Promise<Auth2FA>;
-  getTwoFactorAuth(userId: number): Promise<Auth2FA | undefined>;
-  updateTwoFactorAuth(userId: number, updates: Partial<Auth2FA>): Promise<Auth2FA>;
+  setupTwoFactorAuth(userId: string, totpSecret: string): Promise<Auth2FA>;
+  getTwoFactorAuth(userId: string): Promise<Auth2FA | undefined>;
+  updateTwoFactorAuth(userId: string, updates: Partial<Auth2FA>): Promise<Auth2FA>;
   
   // Password reset
   createPasswordReset(resetData: InsertAuthPasswordReset): Promise<AuthPasswordReset>;
@@ -52,7 +52,7 @@ export interface IStorage {
   
   // Audit logging
   createAuditLog(logData: InsertAuthAuditLog): Promise<AuthAuditLog>;
-  getAuditLogsByUser(userId: number, limit?: number, offset?: number): Promise<AuthAuditLog[]>;
+  getAuditLogsByUser(userId: string, limit?: number, offset?: number): Promise<AuthAuditLog[]>;
   getAuditLogsByEventType(eventType: string, limit?: number, offset?: number): Promise<AuthAuditLog[]>;
   getAuditLogs(limit?: number, offset?: number): Promise<AuthAuditLog[]>;
 }
@@ -67,30 +67,27 @@ export class MemStorage implements IStorage {
   private passwordResets: AuthPasswordReset[] = [];
   private auditLogs: AuthAuditLog[] = [];
   
-  private nextUserId = 1;
-  private nextRoleId = 1;
-  private nextSessionId = 1;
-  private nextTwoFactorId = 1;
-  private nextPasswordResetId = 1;
-  private nextAuditLogId = 1;
-
   constructor() {
     this.schema = databaseSchema;
-    
-    // Add default roles
     this._initializeRoles();
   }
 
   private async _initializeRoles() {
-    await this.createRole({
-      name: "admin",
-      description: "Administrator with full access"
-    });
-    
-    await this.createRole({
-      name: "user",
-      description: "Regular user with limited access"
-    });
+    // Create default roles if they don't exist
+    const defaultRoles = [
+      { name: "admin", description: "Administrator with full access" },
+      { name: "user", description: "Regular user with limited access" }
+    ];
+
+    for (const roleData of defaultRoles) {
+      const existingRole = this.roles.find(r => r.name === roleData.name);
+      if (!existingRole) {
+        await this.createRole({
+          name: roleData.name,
+          description: roleData.description
+        });
+      }
+    }
   }
 
   // Schema-related methods
@@ -200,7 +197,7 @@ export class MemStorage implements IStorage {
   }
 
   // User operations for standard authentication
-  async getUser(id: number): Promise<User | undefined> {
+  async getUser(id: string): Promise<User | undefined> {
     return this.users.find(user => user.id === id);
   }
 
@@ -213,14 +210,14 @@ export class MemStorage implements IStorage {
   }
 
   async createUser(userData: InsertUser): Promise<User> {
-    const newUser: User = {
-      id: this.nextUserId++,
+    const user: User = {
+      id: crypto.randomUUID(),
       username: userData.username,
       email: userData.email,
-      password: userData.password,
       mobile_number: userData.mobile_number || null,
+      password: userData.password,
       role: userData.role || "user",
-      roleId: userData.roleId || 2, // Default to 'user' role if not specified
+      roleId: userData.roleId || null,
       isActive: userData.isActive !== undefined ? userData.isActive : true,
       lastLogin: null,
       createdAt: new Date(),
@@ -228,16 +225,16 @@ export class MemStorage implements IStorage {
       deletedAt: null
     };
     
-    this.users.push(newUser);
-    return newUser;
+    this.users.push(user);
+    return user;
   }
 
   async createRole(roleData: InsertRole): Promise<Role> {
     const role: Role = {
-      id: this.nextRoleId++,
+      id: crypto.randomUUID(),
       name: roleData.name,
       description: roleData.description || null,
-      createdAt: new Date(),
+      createdAt: new Date()
     };
     
     this.roles.push(role);
@@ -253,63 +250,62 @@ export class MemStorage implements IStorage {
     return this.users.find(user => user.email === email);
   }
   
-  async updateUserLastLogin(userId: number): Promise<void> {
+  async updateUserLastLogin(userId: string): Promise<void> {
     const user = await this.getUser(userId);
     if (user) {
       user.lastLogin = new Date();
     }
   }
   
-  async updateUser(userId: number, updates: Partial<User>): Promise<User> {
+  async updateUser(userId: string, updates: Partial<User>): Promise<User> {
     const user = await this.getUser(userId);
     if (!user) {
       throw new Error("User not found");
     }
     
-    // Apply updates
     Object.assign(user, updates, { updatedAt: new Date() });
     return user;
   }
   
   async upsertUser(userData: UpsertAuthUser): Promise<User> {
-    // Check if user already exists
-    let user = await this.getUserByUsername(userData.username);
+    let user = await this.getUserByEmail(userData.email);
     
     if (user) {
       // Update existing user
-      if (userData.email) user.email = userData.email;
-      if (userData.mobile_number) user.mobile_number = userData.mobile_number;
-      if (userData.password) user.password = userData.password;
-      if (userData.role) user.role = userData.role;
-      if (userData.roleId) user.roleId = userData.roleId;
-      if (userData.isActive !== undefined) user.isActive = userData.isActive;
-      
-      user.updatedAt = new Date();
-      return user;
-    } else {
-      // Create new user
-      return this.createUser({
+      Object.assign(user, {
         username: userData.username,
         email: userData.email,
-        password: userData.password || 'defaultpassword', // Should not happen in practice
         mobile_number: userData.mobile_number,
+        password: userData.password,
+        role: userData.role,
+        roleId: userData.roleId,
+        isActive: userData.isActive,
+        updatedAt: new Date()
+      });
+    } else {
+      // Create new user
+      user = await this.createUser({
+        username: userData.username,
+        email: userData.email,
+        mobile_number: userData.mobile_number,
+        password: userData.password,
         role: userData.role,
         roleId: userData.roleId,
         isActive: userData.isActive
       });
     }
+    
+    return user;
   }
   
   // Session management
   async createSession(sessionData: InsertAuthSession): Promise<AuthSession> {
     const session: AuthSession = {
-      id: this.nextSessionId++,
+      id: crypto.randomUUID(),
       user_id: sessionData.user_id,
-      session_id: sessionData.session_id,
-      jwt_token: sessionData.jwt_token || null,
-      refresh_token: sessionData.refresh_token || null,
-      ip_address: sessionData.ip_address || null,
+      token_hash: sessionData.token_hash,
       device_info: sessionData.device_info || null,
+      ip_address: sessionData.ip_address,
       expires_at: sessionData.expires_at,
       created_at: new Date()
     };
@@ -319,14 +315,14 @@ export class MemStorage implements IStorage {
   }
   
   async getSessionByRefreshToken(refreshToken: string): Promise<AuthSession | undefined> {
-    return this.sessions.find(session => session.refresh_token === refreshToken);
+    return this.sessions.find(session => session.token_hash === refreshToken);
   }
   
   async getSessionByToken(token: string): Promise<AuthSession | undefined> {
-    return this.sessions.find(session => session.jwt_token === token);
+    return this.sessions.find(session => session.token_hash === token);
   }
   
-  async updateSession(sessionId: number, updates: Partial<AuthSession>): Promise<AuthSession> {
+  async updateSession(sessionId: string, updates: Partial<AuthSession>): Promise<AuthSession> {
     const session = this.sessions.find(session => session.id === sessionId);
     if (!session) {
       throw new Error("Session not found");
@@ -337,29 +333,20 @@ export class MemStorage implements IStorage {
   }
   
   async deleteSessionByToken(token: string): Promise<void> {
-    const index = this.sessions.findIndex(session => session.jwt_token === token);
+    const index = this.sessions.findIndex(session => session.token_hash === token);
     if (index !== -1) {
       this.sessions.splice(index, 1);
     }
   }
   
-  async invalidateAllUserSessions(userId: number): Promise<void> {
+  async invalidateAllUserSessions(userId: string): Promise<void> {
     this.sessions = this.sessions.filter(session => session.user_id !== userId);
   }
   
   // Two-factor authentication
-  async setupTwoFactorAuth(userId: number, totpSecret: string): Promise<Auth2FA> {
-    // Check if user already has 2FA
-    const existing = await this.getTwoFactorAuth(userId);
-    if (existing) {
-      existing.totp_secret = totpSecret;
-      existing.updated_at = new Date();
-      return existing;
-    }
-    
-    // Create new 2FA record
+  async setupTwoFactorAuth(userId: string, totpSecret: string): Promise<Auth2FA> {
     const twoFactorAuth: Auth2FA = {
-      id: this.nextTwoFactorId++,
+      id: crypto.randomUUID(),
       user_id: userId,
       totp_secret: totpSecret,
       phone_number: null,
@@ -372,11 +359,11 @@ export class MemStorage implements IStorage {
     return twoFactorAuth;
   }
   
-  async getTwoFactorAuth(userId: number): Promise<Auth2FA | undefined> {
+  async getTwoFactorAuth(userId: string): Promise<Auth2FA | undefined> {
     return this.twoFactorAuth.find(tfa => tfa.user_id === userId);
   }
   
-  async updateTwoFactorAuth(userId: number, updates: Partial<Auth2FA>): Promise<Auth2FA> {
+  async updateTwoFactorAuth(userId: string, updates: Partial<Auth2FA>): Promise<Auth2FA> {
     const twoFactorAuth = await this.getTwoFactorAuth(userId);
     if (!twoFactorAuth) {
       throw new Error("Two-factor authentication not found");
@@ -388,8 +375,8 @@ export class MemStorage implements IStorage {
   
   // Password reset
   async createPasswordReset(resetData: InsertAuthPasswordReset): Promise<AuthPasswordReset> {
-    const passwordReset: AuthPasswordReset = {
-      id: this.nextPasswordResetId++,
+    const reset: AuthPasswordReset = {
+      id: crypto.randomUUID(),
       user_id: resetData.user_id,
       token: resetData.token,
       expires_at: resetData.expires_at,
@@ -397,8 +384,8 @@ export class MemStorage implements IStorage {
       used_at: null
     };
     
-    this.passwordResets.push(passwordReset);
-    return passwordReset;
+    this.passwordResets.push(reset);
+    return reset;
   }
   
   async getPasswordResetByToken(token: string): Promise<AuthPasswordReset | undefined> {
@@ -415,8 +402,8 @@ export class MemStorage implements IStorage {
   // Audit logging
   async createAuditLog(logData: InsertAuthAuditLog): Promise<AuthAuditLog> {
     const auditLog: AuthAuditLog = {
-      id: this.nextAuditLogId++,
-      user_id: logData.user_id,
+      id: crypto.randomUUID(),
+      user_id: logData.user_id || null,
       event_type: logData.event_type,
       event_timestamp: new Date(),
       ip_address: logData.ip_address || null,
@@ -431,12 +418,10 @@ export class MemStorage implements IStorage {
     return auditLog;
   }
   
-  async getAuditLogsByUser(userId: number, limit: number = 100, offset: number = 0): Promise<AuthAuditLog[]> {
-    const userLogs = this.auditLogs
+  async getAuditLogsByUser(userId: string, limit: number = 100, offset: number = 0): Promise<AuthAuditLog[]> {
+    return this.auditLogs
       .filter(log => log.user_id === userId)
-      .sort((a, b) => b.event_timestamp.getTime() - a.event_timestamp.getTime());
-    
-    return userLogs.slice(offset, offset + limit);
+      .slice(offset, offset + limit);
   }
   
   async getAuditLogsByEventType(eventType: string, limit: number = 100, offset: number = 0): Promise<AuthAuditLog[]> {

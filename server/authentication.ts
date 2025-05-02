@@ -28,7 +28,7 @@ const BCRYPT_SALT_ROUNDS = 12;
 
 // Types
 interface JwtPayload {
-  userId: number;
+  id: string;
   username: string;
   email: string;
   role: string;
@@ -60,9 +60,9 @@ export async function comparePasswords(supplied: string, stored: string): Promis
  * @param user - User object with authentication data
  * @returns JWT token string
  */
-export function generateJwtToken(user: { id: number, username: string, email: string, role: string }): string {
+export function generateJwtToken(user: { id: string, username: string, email: string, role: string }): string {
   const payload: JwtPayload = {
-    userId: user.id,
+    id: user.id,
     username: user.username,
     email: user.email,
     role: user.role,
@@ -76,8 +76,8 @@ export function generateJwtToken(user: { id: number, username: string, email: st
  * @param userId - ID of the user
  * @returns Refresh token string
  */
-export function generateRefreshToken(userId: number): string {
-  return jwt.sign({ userId }, JWT_REFRESH_SECRET, { expiresIn: JWT_REFRESH_EXPIRES_IN });
+export function generateRefreshToken(userId: string): string {
+  return jwt.sign({ id: userId }, JWT_REFRESH_SECRET, { expiresIn: JWT_REFRESH_EXPIRES_IN });
 }
 
 /**
@@ -98,10 +98,10 @@ export function validateJwtToken(token: string): JwtPayload | null {
  * @param token - Refresh token to validate
  * @returns User ID or null if invalid
  */
-export function validateRefreshToken(token: string): number | null {
+export function validateRefreshToken(token: string): string | null {
   try {
-    const decoded = jwt.verify(token, JWT_REFRESH_SECRET) as { userId: number };
-    return decoded.userId;
+    const decoded = jwt.verify(token, JWT_REFRESH_SECRET) as { id: string };
+    return decoded.id;
   } catch (error) {
     return null;
   }
@@ -149,7 +149,7 @@ export function setupAuth(app: Express) {
     done(null, (user as any).id);
   });
   
-  passport.deserializeUser(async (id: number, done) => {
+  passport.deserializeUser(async (id: string, done) => {
     try {
       const user = await storage.getUser(id);
       done(null, user);
@@ -230,11 +230,9 @@ export function setupAuth(app: Express) {
       // Store session
       await storage.createSession({
         user_id: newUser.id,
-        session_id: randomBytes(16).toString('hex'),
-        jwt_token: token,
-        refresh_token: refreshToken,
+        token_hash: token,
+        device_info: req.headers['user-agent'] || null,
         ip_address: req.ip,
-        device_info: req.headers['user-agent'] || '',
         expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
       });
       
@@ -250,7 +248,7 @@ export function setupAuth(app: Express) {
           role: newUser.role 
         },
         resource_type: 'user',
-        resource_id: newUser.id.toString(),
+        resource_id: newUser.id,
         status: 'SUCCESS'
       });
       
@@ -292,103 +290,145 @@ export function setupAuth(app: Express) {
    * Request body: { email, password }
    * Response: 200 OK - Login successful with tokens
    */
-  app.post("/auth/login", (req, res, next) => {
-    passport.authenticate("local", async (err: any, user: any, info: any) => {
-      if (err) return next(err);
+  app.post("/auth/login", async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      
+      // Validate input
+      if (!email || !password) {
+        return res.status(400).json({ 
+          message: "Missing required fields",
+          errors: {
+            email: !email ? "Email is required" : null,
+            password: !password ? "Password is required" : null,
+          }
+        });
+      }
+      
+      // Get user by email
+      const user = await storage.getUserByEmail(email);
       if (!user) {
-        // Log failed login attempt
+        // Log failed login attempt - user not found
         await storage.createAuditLog({
           user_id: null,
-          event_type: 'LOGIN_FAILED',
-          ip_address: req.ip,
+          event_type: 'LOGIN_ATTEMPT',
+          ip_address: req.ip || null,
           user_agent: req.headers['user-agent'] || null,
-          event_details: { 
-            reason: info?.message || "Invalid credentials",
-            email: req.body.email 
-          },
+          event_details: { email, reason: 'USER_NOT_FOUND' },
           resource_type: 'user',
           resource_id: null,
           status: 'FAILED'
         });
         
-        return res.status(401).json({ 
-          message: info?.message || "Invalid credentials" 
-        });
+        return res.status(401).json({ message: "Invalid email or password" });
       }
       
-      try {
-        // Generate tokens
-        const token = generateJwtToken({
+      // Check if user is active
+      if (!user.isActive) {
+        // Log failed login attempt - inactive account
+        await storage.createAuditLog({
+          user_id: user.id,
+          event_type: 'LOGIN_ATTEMPT',
+          ip_address: req.ip || null,
+          user_agent: req.headers['user-agent'] || null,
+          event_details: { email, reason: 'ACCOUNT_INACTIVE' },
+          resource_type: 'user',
+          resource_id: user.id,
+          status: 'FAILED'
+        });
+        
+        return res.status(401).json({ message: "Account is inactive" });
+      }
+      
+      // Verify password
+      const isPasswordValid = await comparePasswords(password, user.password);
+      if (!isPasswordValid) {
+        // Log failed login attempt - invalid password
+        await storage.createAuditLog({
+          user_id: user.id,
+          event_type: 'LOGIN_ATTEMPT',
+          ip_address: req.ip || null,
+          user_agent: req.headers['user-agent'] || null,
+          event_details: { email, reason: 'INVALID_PASSWORD' },
+          resource_type: 'user',
+          resource_id: user.id,
+          status: 'FAILED'
+        });
+        
+        return res.status(401).json({ message: "Invalid email or password" });
+      }
+      
+      // Generate tokens
+      const token = generateJwtToken({
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+      });
+      
+      const refreshToken = generateRefreshToken(user.id);
+      
+      // Store session with proper IP handling
+      const forwardedFor = req.headers['x-forwarded-for'];
+      const clientIp = req.ip || 
+                      req.socket.remoteAddress || 
+                      (typeof forwardedFor === 'string' ? forwardedFor.split(',')[0].trim() : null) || 
+                      '0.0.0.0';
+      
+      await storage.createSession({
+        user_id: user.id,
+        token_hash: token,
+        device_info: req.headers['user-agent'] || null,
+        ip_address: clientIp,
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+      });
+      
+      // Update last login timestamp
+      await storage.updateUserLastLogin(user.id);
+      
+      // Log successful login
+      await storage.createAuditLog({
+        user_id: user.id,
+        event_type: 'LOGIN',
+        ip_address: req.ip || null,
+        user_agent: req.headers['user-agent'] || null,
+        event_details: { 
+          username: user.username,
+          email: user.email
+        },
+        resource_type: 'user',
+        resource_id: user.id,
+        status: 'SUCCESS'
+      });
+      
+      // Return user data and tokens
+      res.json({
+        user: {
           id: user.id,
           username: user.username,
           email: user.email,
           role: user.role,
-        });
-        
-        const refreshToken = generateRefreshToken(user.id);
-        
-        // Store session
-        await storage.createSession({
-          user_id: user.id,
-          session_id: randomBytes(16).toString('hex'),
-          jwt_token: token,
-          refresh_token: refreshToken,
-          ip_address: req.ip,
-          device_info: req.headers['user-agent'] || '',
-          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
-        });
-        
-        // Update last login time
-        await storage.updateUserLastLogin(user.id);
-        
-        // Log successful login
-        await storage.createAuditLog({
-          user_id: user.id,
-          event_type: 'LOGIN_SUCCESS',
-          ip_address: req.ip,
-          user_agent: req.headers['user-agent'] || null,
-          event_details: { 
-            username: user.username, 
-            email: user.email,
-            role: user.role
-          },
-          resource_type: 'user',
-          resource_id: user.id.toString(),
-          status: 'SUCCESS'
-        });
-        
-        res.json({
-          message: "Login successful",
-          user: {
-            id: user.id,
-            username: user.username,
-            email: user.email,
-            role: user.role,
-          },
-          token,
-          refreshToken,
-        });
-      } catch (error: any) {
-        console.error("Login error:", error);
-        
-        // Log login error
-        await storage.createAuditLog({
-          user_id: user.id,
-          event_type: 'LOGIN_ERROR',
-          ip_address: req.ip,
-          user_agent: req.headers['user-agent'] || null,
-          event_details: { 
-            error: error.message || 'Unknown error',
-            username: user.username 
-          },
-          resource_type: 'user',
-          resource_id: user.id.toString(),
-          status: 'ERROR'
-        });
-        
-        res.status(500).json({ message: "Failed to log in" });
-      }
-    })(req, res, next);
+        },
+        token,
+        refreshToken,
+      });
+    } catch (error: any) {
+      console.error("Login error:", error);
+      
+      // Log login error
+      await storage.createAuditLog({
+        user_id: null,
+        event_type: 'LOGIN_ERROR',
+        ip_address: req.ip || null,
+        user_agent: req.headers['user-agent'] || null,
+        event_details: { error: error.message || 'Unknown error' },
+        resource_type: 'user',
+        resource_id: null,
+        status: 'ERROR'
+      });
+      
+      res.status(500).json({ message: "Failed to login" });
+    }
   });
 
   /**
@@ -455,7 +495,7 @@ export function setupAuth(app: Express) {
             reason: !user ? "User not found" : "User account inactive"
           },
           resource_type: 'user',
-          resource_id: userId.toString(),
+          resource_id: userId,
           status: 'FAILED'
         });
         
@@ -474,8 +514,7 @@ export function setupAuth(app: Express) {
       
       // Update session with new tokens
       await storage.updateSession(session.id, {
-        jwt_token: newToken,
-        refresh_token: newRefreshToken,
+        token_hash: newToken,
         expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
       });
       
@@ -490,7 +529,7 @@ export function setupAuth(app: Express) {
           email: user.email
         },
         resource_type: 'session',
-        resource_id: session.id.toString(),
+        resource_id: session.id,
         status: 'SUCCESS'
       });
       
@@ -556,7 +595,7 @@ export function setupAuth(app: Express) {
       
       // Log successful logout
       await storage.createAuditLog({
-        user_id: payload.userId,
+        user_id: payload.id,
         event_type: 'LOGOUT',
         ip_address: req.ip,
         user_agent: req.headers['user-agent'] || null,
@@ -577,7 +616,7 @@ export function setupAuth(app: Express) {
         const payload = validateJwtToken(token);
         if (payload) {
           await storage.createAuditLog({
-            user_id: payload.userId,
+            user_id: payload.id,
             event_type: 'LOGOUT_ERROR',
             ip_address: req.ip,
             user_agent: req.headers['user-agent'] || null,
@@ -930,15 +969,15 @@ export function jwtAuthMiddleware(req: Request, res: Response, next: NextFunctio
   }
   
   // Set user data in request object
-  (req as any).userId = payload.userId;
+  (req as any).userId = payload.id;
   (req as any).user = {
-    id: payload.userId,
+    id: payload.id,
     username: payload.username,
     email: payload.email,
     role: payload.role,
   };
   
-  console.log(`JWT Auth: Token valid for user: ${payload.username} (${payload.userId})`);
+  console.log(`JWT Auth: Token valid for user: ${payload.username} (${payload.id})`);
   next();
 }
 
